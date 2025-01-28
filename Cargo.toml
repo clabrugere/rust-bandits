@@ -1,0 +1,11 @@
+[package]
+name = "rust-bandits"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = {version = "0.8.5", features = ["small_rng"]}
+actix = "0.13.5"
+actix-web = "4.9"
+serde = { version = "1.0", features = ["derive"] }
+uuid = {version = "1.12.1", features = ["v4", "fast-rng", "serde"]}
