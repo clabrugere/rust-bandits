@@ -1,5 +1,7 @@
-use super::routes::ApiResponse;
-use crate::supervisor::errors::SupervisorOrBanditError;
+use super::responses::ApiResponse;
+
+use crate::actors::errors::SupervisorOrBanditError;
+
 use actix_web::{error::ResponseError, http::header::ContentType, http::StatusCode, HttpResponse};
 
 use thiserror::Error;

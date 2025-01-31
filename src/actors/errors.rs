@@ -1,4 +1,5 @@
-use crate::bandit::errors::BanditOrPolicyError;
+use crate::policies::errors::PolicyError;
+
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -16,4 +17,15 @@ pub enum SupervisorOrBanditError {
     Supervisor(#[from] SupervisorError),
     #[error(transparent)]
     Bandit(#[from] BanditOrPolicyError),
+}
+
+#[derive(Debug, Error)]
+pub enum BanditError {}
+
+#[derive(Debug, Error)]
+pub enum BanditOrPolicyError {
+    #[error(transparent)]
+    Bandit(#[from] BanditError),
+    #[error(transparent)]
+    PolicyError(#[from] PolicyError),
 }

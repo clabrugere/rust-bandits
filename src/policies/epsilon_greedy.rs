@@ -1,10 +1,70 @@
-use super::arm::{Arm, Arms};
+use super::arm::{Arm, ArmStats, Arms};
 use super::errors::PolicyError;
 use super::policy::{Policy, PolicyStats};
+
 use rand::{rngs::SmallRng, seq::IteratorRandom, Rng, SeedableRng};
+use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EpsilonGreedyArm {
+    pub(super) value: f64,
+    pub(super) pulls: usize,
+    pub(super) rewards: f64,
+    pub(super) is_active: bool,
+}
+
+impl Default for EpsilonGreedyArm {
+    fn default() -> Self {
+        Self {
+            value: 0.0,
+            pulls: 0,
+            rewards: 0.0,
+            is_active: true,
+        }
+    }
+}
+
+impl Eq for EpsilonGreedyArm {}
+
+impl PartialEq for EpsilonGreedyArm {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl PartialOrd for EpsilonGreedyArm {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for EpsilonGreedyArm {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.value
+            .partial_cmp(&other.value)
+            .unwrap_or(Ordering::Equal)
+    }
+}
+
+impl Arm for EpsilonGreedyArm {
+    fn reset(&mut self) {
+        self.value = 0.0;
+        self.pulls = 0;
+        self.rewards = 0.0;
+    }
+
+    fn stats(&self) -> ArmStats {
+        ArmStats {
+            pulls: self.pulls,
+            rewards: self.rewards,
+            is_active: self.is_active,
+        }
+    }
+}
 
 pub struct EpsilonGreedy {
-    arms: Arms,
+    arms: Arms<EpsilonGreedyArm>,
     epsilon: f64,
     rng: SmallRng,
 }
@@ -32,7 +92,7 @@ impl Policy for EpsilonGreedy {
 
     fn add_arm(&mut self) -> usize {
         let arm_id = self.arms.len();
-        self.arms.insert(arm_id, Arm::default());
+        self.arms.insert(arm_id, EpsilonGreedyArm::default());
         arm_id
     }
 
@@ -84,7 +144,13 @@ impl Policy for EpsilonGreedy {
     }
 
     fn stats(&self) -> PolicyStats {
-        PolicyStats::from(&self.arms)
+        PolicyStats {
+            arms: self
+                .arms
+                .iter()
+                .map(|(&id, arm)| (id, arm.stats()))
+                .collect(),
+        }
     }
 }
 

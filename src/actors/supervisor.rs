@@ -1,8 +1,8 @@
+use super::bandit::{AddArm, Bandit, DeleteArm, Draw, GetStats, Reset, Update, UpdateBatch};
 use super::errors::{SupervisorError, SupervisorOrBanditError};
-use crate::{
-    bandit::{AddArm, Bandit, DeleteArm, Draw, GetStats, Reset, Update, UpdateBatch},
-    policy::{create_policy, PolicyStats, PolicyType},
-};
+
+use crate::policies::{create_policy, PolicyStats, PolicyType};
+
 use actix::prelude::*;
 use std::collections::HashMap;
 use uuid::Uuid;

@@ -1,7 +1,16 @@
-use super::arm::Arms;
+use super::arm::ArmStats;
 use super::epsilon_greedy::EpsilonGreedy;
 use super::errors::PolicyError;
+
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+//pub type PolicyStats = HashMap<usize, ArmStats>;
+
+#[derive(Debug, Serialize)]
+pub struct PolicyStats {
+    pub arms: HashMap<usize, ArmStats>,
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum PolicyType {
@@ -24,15 +33,4 @@ pub trait Policy {
     fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
     fn update_batch(&mut self, updates: &[(usize, usize, f64)]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
-}
-
-#[derive(Debug, Serialize)]
-pub struct PolicyStats {
-    pub arms: Arms,
-}
-
-impl From<&Arms> for PolicyStats {
-    fn from(arms: &Arms) -> Self {
-        Self { arms: arms.clone() }
-    }
 }

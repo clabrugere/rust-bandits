@@ -1,18 +1,18 @@
+mod actors;
 mod api;
-mod bandit;
-mod policy;
-mod supervisor;
+mod policies;
 
 use actix::prelude::*;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
+use actors::supervisor::Supervisor;
 use api::routes::{
     add_arm_bandit, bandit_stats, create_bandit, delete_arm_bandit, delete_bandit, draw_bandit,
-    list_bandits, reset_bandit, update_bandit,
+    list_bandits, reset_bandit, update_bandit, update_batch_bandit,
 };
-use supervisor::Supervisor;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let supervisor = Supervisor::new().start();
 
     HttpServer::new(move || {
@@ -27,6 +27,7 @@ async fn main() -> std::io::Result<()> {
             .service(delete_arm_bandit)
             .service(draw_bandit)
             .service(update_bandit)
+            .service(update_batch_bandit)
             .service(bandit_stats)
     })
     .bind("127.0.0.1:8080")?

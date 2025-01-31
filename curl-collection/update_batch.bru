@@ -1,0 +1,17 @@
+meta {
+  name: update_batch
+  type: http
+  seq: 6
+}
+
+post {
+  url: http://127.0.0.1:8080/bandit/f522d73f-2aae-41f8-869a-13cf7c1d959d/update_batch
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "updates": [[0, 0, 0], [1, 1, 1]]
+  }
+}

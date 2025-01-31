@@ -1,82 +1,22 @@
 use super::errors::ApiResponseError;
-use crate::policy::PolicyType;
-use crate::supervisor::{
+use super::requests::{UpdateBatchPayload, UpdatePayload};
+use super::responses::{
+    AddArmResponse, ApiResponse, CreateResponse, DrawResponse, ListBanditsResponse,
+};
+
+use crate::actors::supervisor::{
     AddArmBandit, CreateBandit, DeleteArmBandit, DeleteBandit, DrawBandit, GetBanditStats,
     ListBandits, ResetBandit, Supervisor, UpdateBandit, UpdateBatchBandit,
 };
+use crate::policies::PolicyType;
+
 use actix::prelude::*;
 use actix_web::{
     get, post,
     web::{Data, Json, Path},
     Responder, Result,
 };
-use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
-
-#[derive(Serialize)]
-pub struct ApiResponse<T> {
-    request_id: Uuid,
-    ts: u128,
-    body: Option<T>,
-}
-
-impl<T> Default for ApiResponse<T> {
-    fn default() -> Self {
-        Self {
-            request_id: Uuid::new_v4(),
-            ts: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis(),
-            body: None,
-        }
-    }
-}
-
-impl<T: Serialize> ApiResponse<T> {
-    pub fn with_data(data: Option<T>) -> Self {
-        Self {
-            request_id: Uuid::new_v4(),
-            ts: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis(),
-            body: data,
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct ListBanditsResponse {
-    bandit_ids: Vec<Uuid>,
-}
-
-#[derive(Serialize)]
-struct CreateResponse {
-    bandit_id: Uuid,
-}
-
-#[derive(Serialize)]
-struct AddArmResponse {
-    arm_id: usize,
-}
-
-#[derive(Serialize)]
-struct DrawResponse {
-    arm_id: usize,
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdatePayload {
-    arm_id: usize,
-    reward: f64,
-}
-
-#[derive(Debug, Deserialize)]
-struct UpdateBatchPayload {
-    updates: Vec<(usize, usize, f64)>,
-}
 
 #[get("bandit/list")]
 async fn list_bandits(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
@@ -205,7 +145,7 @@ async fn update_bandit(
     payload: Json<UpdatePayload>,
 ) -> Result<impl Responder> {
     let bandit_id = Uuid::try_parse(&bandit_id).map_err(ApiResponseError::ErrorBadUuid)?;
-    let UpdatePayload { arm_id, reward } = payload.into_inner();
+    let UpdatePayload { arm_id, reward, .. } = payload.into_inner();
     supervisor
         .send(UpdateBandit {
             bandit_id,
@@ -229,8 +169,12 @@ async fn update_batch_bandit(
 ) -> Result<impl Responder> {
     let bandit_id = Uuid::try_parse(&bandit_id).map_err(ApiResponseError::ErrorBadUuid)?;
     let UpdateBatchPayload { updates } = payload.into_inner();
+
     supervisor
-        .send(UpdateBatchBandit { bandit_id, updates })
+        .send(UpdateBatchBandit {
+            bandit_id,
+            updates: updates.iter().map(|u| (u.ts, u.arm_id, u.reward)).collect(),
+        })
         .await
         .map_err(|_| ApiResponseError::InternalError)?
         .map_err(ApiResponseError::ErrorBadRequest)?;

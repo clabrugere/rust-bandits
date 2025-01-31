@@ -1,6 +1,8 @@
 use super::errors::BanditOrPolicyError;
-use crate::policy::{Policy, PolicyStats};
-use crate::supervisor::{BanditCrashed, Supervisor};
+use super::supervisor::{BanditCrashed, Supervisor};
+
+use crate::policies::{Policy, PolicyStats};
+
 use actix::prelude::*;
 use uuid::Uuid;
 
