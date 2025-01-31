@@ -1,61 +1,14 @@
+use super::errors::{SupervisorError, SupervisorOrBanditError};
 use crate::{
-    actor::{AddArm, BanditActor, DeleteArm, Draw, GetStats, Reset, Update},
-    policies::bandit::{create_bandit, BanditError, BanditStats, BanditType},
+    bandit::{AddArm, Bandit, DeleteArm, Draw, GetStats, Reset, Update, UpdateBatch},
+    policy::{create_policy, PolicyStats, PolicyType},
 };
 use actix::prelude::*;
-use std::{collections::HashMap, error::Error, fmt};
+use std::collections::HashMap;
 use uuid::Uuid;
 
-#[derive(Debug)]
-pub enum SupervisorError {
-    BanditNotAvailable(Uuid),
-    BanditNotFound(Uuid),
-}
-
-impl Error for SupervisorError {}
-
-impl fmt::Display for SupervisorError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            SupervisorError::BanditNotAvailable(bandit_id) => {
-                write!(f, "Bandit {} not available", bandit_id)
-            }
-            SupervisorError::BanditNotFound(bandit_id) => {
-                write!(f, "Bandit {} not found", bandit_id)
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum SupervisorOrBanditError {
-    Supervisor(SupervisorError),
-    Bandit(BanditError),
-}
-
-impl fmt::Display for SupervisorOrBanditError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            SupervisorOrBanditError::Supervisor(err) => write!(f, "Supervisor error: {}", err),
-            SupervisorOrBanditError::Bandit(err) => write!(f, "Bandit error: {}", err),
-        }
-    }
-}
-
-impl From<SupervisorError> for SupervisorOrBanditError {
-    fn from(err: SupervisorError) -> Self {
-        SupervisorOrBanditError::Supervisor(err)
-    }
-}
-
-impl From<BanditError> for SupervisorOrBanditError {
-    fn from(err: BanditError) -> Self {
-        SupervisorOrBanditError::Bandit(err)
-    }
-}
-
 pub struct Supervisor {
-    bandits: HashMap<Uuid, Addr<BanditActor>>,
+    bandits: HashMap<Uuid, Addr<Bandit>>,
 }
 
 impl Supervisor {
@@ -65,10 +18,10 @@ impl Supervisor {
         }
     }
 
-    pub fn create_bandit(&mut self, bandit_type: BanditType) -> Uuid {
+    pub fn create_bandit(&mut self, policy_type: PolicyType, ctx: &mut Context<Self>) -> Uuid {
         let bandit_id = Uuid::new_v4();
-        let bandit = create_bandit(bandit_type);
-        let actor = BanditActor::new(bandit).start();
+        let policy = create_policy(&policy_type);
+        let actor = Bandit::new(bandit_id, policy, ctx.address()).start();
 
         self.bandits.insert(bandit_id, actor);
         bandit_id
@@ -95,11 +48,11 @@ pub struct ListBandits;
 #[derive(Message)]
 #[rtype(result = "Uuid")]
 pub struct CreateBandit {
-    pub bandit_type: BanditType,
+    pub bandit_type: PolicyType,
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<(), SupervisorError>")]
+#[rtype(result = "Result<(), SupervisorOrBanditError>")]
 pub struct DeleteBandit {
     pub bandit_id: Uuid,
 }
@@ -138,15 +91,28 @@ pub struct UpdateBandit {
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<BanditStats, SupervisorOrBanditError>")]
+#[rtype(result = "Result<(), SupervisorOrBanditError>")]
+pub struct UpdateBatchBandit {
+    pub bandit_id: Uuid,
+    pub updates: Vec<(usize, usize, f64)>,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<PolicyStats, SupervisorOrBanditError>")]
 pub struct GetBanditStats {
+    pub bandit_id: Uuid,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct BanditCrashed {
     pub bandit_id: Uuid,
 }
 
 impl Handler<ListBandits> for Supervisor {
     type Result = MessageResult<ListBandits>;
 
-    fn handle(&mut self, _: ListBandits, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: ListBandits, _: &mut Context<Self>) -> Self::Result {
         MessageResult(self.bandits.keys().cloned().collect())
     }
 }
@@ -154,16 +120,17 @@ impl Handler<ListBandits> for Supervisor {
 impl Handler<CreateBandit> for Supervisor {
     type Result = MessageResult<CreateBandit>;
 
-    fn handle(&mut self, msg: CreateBandit, _: &mut Self::Context) -> Self::Result {
-        MessageResult(self.create_bandit(msg.bandit_type))
+    fn handle(&mut self, msg: CreateBandit, ctx: &mut Context<Self>) -> Self::Result {
+        MessageResult(self.create_bandit(msg.bandit_type, ctx))
     }
 }
 
 impl Handler<DeleteBandit> for Supervisor {
-    type Result = Result<(), SupervisorError>;
+    type Result = Result<(), SupervisorOrBanditError>;
 
-    fn handle(&mut self, msg: DeleteBandit, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: DeleteBandit, _: &mut Context<Self>) -> Self::Result {
         self.delete_bandit(&msg.bandit_id)
+            .map_err(SupervisorOrBanditError::from)
     }
 }
 
@@ -270,8 +237,32 @@ impl Handler<UpdateBandit> for Supervisor {
     }
 }
 
+impl Handler<UpdateBatchBandit> for Supervisor {
+    type Result = ResponseFuture<Result<(), SupervisorOrBanditError>>;
+
+    fn handle(&mut self, msg: UpdateBatchBandit, _: &mut Context<Self>) -> Self::Result {
+        if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
+            Box::pin(async move {
+                actor
+                    .send(UpdateBatch {
+                        updates: msg.updates,
+                    })
+                    .await
+                    .map_err(|_| {
+                        SupervisorOrBanditError::from(SupervisorError::BanditNotAvailable(
+                            msg.bandit_id,
+                        ))
+                    })?
+                    .map_err(SupervisorOrBanditError::from)
+            })
+        } else {
+            Box::pin(async move { Err(SupervisorError::BanditNotFound(msg.bandit_id).into()) })
+        }
+    }
+}
+
 impl Handler<GetBanditStats> for Supervisor {
-    type Result = ResponseFuture<Result<BanditStats, SupervisorOrBanditError>>;
+    type Result = ResponseFuture<Result<PolicyStats, SupervisorOrBanditError>>;
 
     fn handle(&mut self, msg: GetBanditStats, _: &mut Context<Self>) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
@@ -287,5 +278,16 @@ impl Handler<GetBanditStats> for Supervisor {
         } else {
             Box::pin(async move { Err(SupervisorError::BanditNotFound(msg.bandit_id).into()) })
         }
+    }
+}
+
+impl Handler<BanditCrashed> for Supervisor {
+    type Result = ();
+
+    fn handle(&mut self, msg: BanditCrashed, _: &mut Context<Self>) -> Self::Result {
+        let _bandit_id = msg.bandit_id;
+        todo!("load from storage");
+        //let actor = Bandit::new(msg.bandit_id, policy, ctx.address()).start();
+        //self.bandits.insert(msg.bandit_id, actor);
     }
 }

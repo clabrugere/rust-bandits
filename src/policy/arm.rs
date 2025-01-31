@@ -1,8 +1,9 @@
+use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, collections::HashMap};
 
 pub type Arms = HashMap<usize, Arm>;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Arm {
     pub(super) value: f64,
     pub(super) pulls: usize,
@@ -44,7 +45,7 @@ impl Ord for Arm {
 }
 
 impl Arm {
-    pub(super) fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.value = 0.0;
         self.pulls = 0;
         self.rewards = 0.0;

@@ -1,5 +1,6 @@
 use super::arm::{Arm, Arms};
-use super::bandit::{Bandit, BanditError, BanditStats};
+use super::errors::PolicyError;
+use super::policy::{Policy, PolicyStats};
 use rand::{rngs::SmallRng, seq::IteratorRandom, Rng, SeedableRng};
 
 pub struct EpsilonGreedy {
@@ -24,7 +25,7 @@ impl EpsilonGreedy {
     }
 }
 
-impl Bandit for EpsilonGreedy {
+impl Policy for EpsilonGreedy {
     fn reset(&mut self) {
         self.arms.values_mut().for_each(|arm| arm.reset());
     }
@@ -35,47 +36,55 @@ impl Bandit for EpsilonGreedy {
         arm_id
     }
 
-    fn delete_arm(&mut self, arm_id: usize) -> Result<(), BanditError> {
+    fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
         if self.arms.contains_key(&arm_id) {
             self.arms.remove(&arm_id);
             Ok(())
         } else {
-            Err(BanditError::ArmNotFound(arm_id))
+            Err(PolicyError::ArmNotFound(arm_id))
         }
     }
 
-    fn draw(&mut self) -> Result<usize, BanditError> {
+    fn draw(&mut self) -> Result<usize, PolicyError> {
         if self.rng.gen::<f64>() < self.epsilon {
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
                 .map(|(&arm_id, _)| arm_id)
                 .choose(&mut self.rng)
-                .ok_or(BanditError::NoArmsAvailable)
+                .ok_or(PolicyError::NoArmsAvailable)
         } else {
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
                 .max_by(|(_, a), (_, b)| a.cmp(b))
                 .map(|(&k, _)| k)
-                .ok_or(BanditError::NoArmsAvailable)
+                .ok_or(PolicyError::NoArmsAvailable)
         }
     }
 
-    fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), BanditError> {
+    fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
         if let Some(arm) = self.arms.get_mut(&arm_id) {
             arm.pulls += 1;
             arm.rewards += reward;
-            arm.value += (1.0 / arm.pulls as f64) * (reward - arm.value);
+            arm.value += (reward - arm.value) / (arm.pulls as f64);
 
             Ok(())
         } else {
-            Err(BanditError::ArmNotFound(arm_id))
+            Err(PolicyError::ArmNotFound(arm_id))
         }
     }
 
-    fn stats(&self) -> BanditStats {
-        BanditStats::from(&self.arms)
+    fn update_batch(&mut self, updates: &[(usize, usize, f64)]) -> Result<(), PolicyError> {
+        let mut updates = updates.to_vec();
+        updates.sort_unstable_by_key(|(ts, _, _)| *ts);
+        updates
+            .iter()
+            .try_for_each(|&(_, arm_id, reward)| self.update(arm_id, reward))
+    }
+
+    fn stats(&self) -> PolicyStats {
+        PolicyStats::from(&self.arms)
     }
 }
 
@@ -137,6 +146,21 @@ mod tests {
         assert!(bandit.update(arm_1, 1.0).is_ok());
         assert_eq!(bandit.arms.get(&arm_1).map(|arm| arm.value), Some(1.0));
         assert_eq!(bandit.arms.get(&arm_2).map(|arm| arm.value), Some(0.0));
+    }
+
+    #[test]
+    fn update_batch() {
+        let mut bandit = EpsilonGreedy::new(0.0, Some(SEED));
+        let arm_1 = bandit.add_arm();
+        let arm_2 = bandit.add_arm();
+        let batch = vec![(0, arm_2, 0.0), (1, arm_1, 1.0), (2, arm_2, 0.0)];
+
+        assert!(bandit.update_batch(&batch).is_ok());
+
+        assert_eq!(bandit.arms.get(&arm_1).map(|arm| arm.pulls), Some(1));
+        assert_eq!(bandit.arms.get(&arm_1).map(|arm| arm.rewards), Some(1.0));
+        assert_eq!(bandit.arms.get(&arm_2).map(|arm| arm.pulls), Some(2));
+        assert_eq!(bandit.arms.get(&arm_2).map(|arm| arm.rewards), Some(0.0));
     }
 
     #[test]
