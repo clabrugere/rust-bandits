@@ -1,23 +1,46 @@
+use super::cache::{InsertPolicyCache, PolicyCache};
 use super::errors::BanditOrPolicyError;
-use super::supervisor::{BanditCrashed, Supervisor};
 
 use crate::policies::{Policy, PolicyStats};
 
 use actix::prelude::*;
+use log::{info, warn};
+use serde_json;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub struct Bandit {
     id: Uuid,
     policy: Box<dyn Policy + Send>,
-    supervisor: Addr<Supervisor>,
+    cache: Addr<PolicyCache>,
+    cache_every: u64,
 }
 
 impl Bandit {
-    pub fn new(id: Uuid, policy: Box<dyn Policy + Send>, supervisor: Addr<Supervisor>) -> Self {
+    pub fn new(
+        id: Uuid,
+        policy: Box<dyn Policy + Send>,
+        cache: Addr<PolicyCache>,
+        cache_every: u64,
+    ) -> Self {
         Self {
             id,
             policy,
-            supervisor,
+            cache,
+            cache_every,
+        }
+    }
+
+    fn cache(&self) {
+        info!("Caching bandit {}", &self.id);
+        match serde_json::to_string_pretty(&self.policy) {
+            Ok(serialized) => {
+                self.cache.do_send(InsertPolicyCache {
+                    bandit_id: self.id,
+                    serialized,
+                });
+            }
+            Err(err) => warn!("Error while serializing bandit {}: {}", self.id, err),
         }
     }
 }
@@ -25,12 +48,20 @@ impl Bandit {
 impl Actor for Bandit {
     type Context = Context<Self>;
 
-    fn stopping(&mut self, _: &mut Context<Self>) -> Running {
-        self.supervisor
-            .do_send(BanditCrashed { bandit_id: self.id });
-        Running::Stop
+    fn started(&mut self, ctx: &mut Context<Self>) {
+        info!("Started bandit {}", self.id);
+        ctx.run_interval(Duration::from_secs(self.cache_every), |bandit, _| {
+            bandit.cache();
+        });
     }
 }
+
+#[derive(Message)]
+#[rtype(result = "Pong")]
+pub struct Ping;
+
+#[derive(MessageResponse)]
+pub struct Pong;
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -66,6 +97,14 @@ pub struct UpdateBatch {
 #[derive(Message)]
 #[rtype(result = "PolicyStats")]
 pub struct GetStats;
+
+impl Handler<Ping> for Bandit {
+    type Result = Pong;
+
+    fn handle(&mut self, _: Ping, _: &mut Self::Context) -> Self::Result {
+        Pong
+    }
+}
 
 impl Handler<Reset> for Bandit {
     type Result = ();

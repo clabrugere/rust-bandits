@@ -5,26 +5,27 @@ use super::errors::PolicyError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-//pub type PolicyStats = HashMap<usize, ArmStats>;
-
 #[derive(Debug, Serialize)]
 pub struct PolicyStats {
     pub arms: HashMap<usize, ArmStats>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub enum PolicyType {
     EpsilonGreedy { epsilon: f64, seed: Option<u64> },
 }
 
-pub fn create_policy(policy_type: &PolicyType) -> Box<dyn Policy + Send> {
-    match policy_type {
-        PolicyType::EpsilonGreedy { epsilon, seed } => {
-            Box::new(EpsilonGreedy::new(*epsilon, *seed))
+impl PolicyType {
+    pub fn into_inner(self) -> Box<dyn Policy + Send> {
+        match self {
+            PolicyType::EpsilonGreedy { epsilon, seed } => {
+                Box::new(EpsilonGreedy::new(epsilon, seed))
+            }
         }
     }
 }
 
+#[typetag::serde(tag = "type")]
 pub trait Policy {
     fn reset(&mut self);
     fn add_arm(&mut self) -> usize;

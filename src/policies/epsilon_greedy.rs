@@ -1,12 +1,13 @@
 use super::arm::{Arm, ArmStats, Arms};
 use super::errors::PolicyError;
 use super::policy::{Policy, PolicyStats};
+use super::rng::MaybeSeededRng;
 
-use rand::{rngs::SmallRng, seq::IteratorRandom, Rng, SeedableRng};
+use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedyArm {
     pub(super) value: f64,
     pub(super) pulls: usize,
@@ -63,28 +64,24 @@ impl Arm for EpsilonGreedyArm {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedy {
     arms: Arms<EpsilonGreedyArm>,
     epsilon: f64,
-    rng: SmallRng,
+    rng: MaybeSeededRng,
 }
 
 impl EpsilonGreedy {
     pub fn new(epsilon: f64, seed: Option<u64>) -> Self {
-        let rng = if let Some(seed) = seed {
-            SmallRng::seed_from_u64(seed)
-        } else {
-            SmallRng::from_entropy()
-        };
-
         Self {
             arms: Arms::new(),
             epsilon,
-            rng,
+            rng: MaybeSeededRng::new(seed),
         }
     }
 }
 
+#[typetag::serde]
 impl Policy for EpsilonGreedy {
     fn reset(&mut self) {
         self.arms.values_mut().for_each(|arm| arm.reset());
@@ -106,12 +103,12 @@ impl Policy for EpsilonGreedy {
     }
 
     fn draw(&mut self) -> Result<usize, PolicyError> {
-        if self.rng.gen::<f64>() < self.epsilon {
+        if self.rng.get_rng().gen::<f64>() < self.epsilon {
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
                 .map(|(&arm_id, _)| arm_id)
-                .choose(&mut self.rng)
+                .choose(&mut self.rng.get_rng())
                 .ok_or(PolicyError::NoArmsAvailable)
         } else {
             self.arms

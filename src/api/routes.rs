@@ -33,11 +33,13 @@ async fn list_bandits(supervisor: Data<Addr<Supervisor>>) -> Result<impl Respond
 #[post("bandit/create")]
 async fn create_bandit(
     supervisor: Data<Addr<Supervisor>>,
-    bandit_type: Json<PolicyType>,
+    policy_type: Json<PolicyType>,
 ) -> Result<impl Responder> {
-    let bandit_type = bandit_type.into_inner();
     let bandit_id = supervisor
-        .send(CreateBandit { bandit_type })
+        .send(CreateBandit {
+            bandit_id: None,
+            policy_type: policy_type.into_inner(),
+        })
         .await
         .map_err(|_| ApiResponseError::InternalError)?;
 

@@ -1,29 +1,51 @@
-use super::bandit::{AddArm, Bandit, DeleteArm, Draw, GetStats, Reset, Update, UpdateBatch};
+use super::bandit::{
+    AddArm, Bandit, DeleteArm, Draw, GetStats, Ping, Pong, Reset, Update, UpdateBatch,
+};
+use super::cache::{PolicyCache, ReadAllPolicyCache, RemovePolicyCache};
 use super::errors::{SupervisorError, SupervisorOrBanditError};
 
-use crate::policies::{create_policy, PolicyStats, PolicyType};
+use crate::config::{BanditConfig, PolicyCacheConfig, SupervisorConfig};
+use crate::policies::{PolicyStats, PolicyType};
 
 use actix::prelude::*;
-use std::collections::HashMap;
+use futures_util::future::join_all;
+use log::{info, warn};
+use serde_json;
+use std::{collections::HashMap, time::Duration};
 use uuid::Uuid;
 
 pub struct Supervisor {
+    config: SupervisorConfig,
     bandits: HashMap<Uuid, Addr<Bandit>>,
+    bandit_config: BanditConfig,
+    cache: Addr<PolicyCache>,
 }
 
 impl Supervisor {
-    pub fn new() -> Self {
+    pub fn new(
+        config: SupervisorConfig,
+        cache_config: PolicyCacheConfig,
+        bandit_config: BanditConfig,
+    ) -> Self {
         Self {
+            config,
             bandits: HashMap::new(),
+            bandit_config,
+            cache: PolicyCache::new(cache_config.clone()).start(),
         }
     }
 
-    pub fn create_bandit(&mut self, policy_type: PolicyType, ctx: &mut Context<Self>) -> Uuid {
-        let bandit_id = Uuid::new_v4();
-        let policy = create_policy(&policy_type);
-        let actor = Bandit::new(bandit_id, policy, ctx.address()).start();
-
+    pub fn create_bandit(&mut self, bandit_id: Option<Uuid>, policy_type: PolicyType) -> Uuid {
+        let bandit_id = bandit_id.unwrap_or(Uuid::new_v4());
+        let actor = Bandit::new(
+            bandit_id,
+            policy_type.into_inner(),
+            self.cache.clone(),
+            self.bandit_config.cache_every,
+        )
+        .start();
         self.bandits.insert(bandit_id, actor);
+
         bandit_id
     }
 
@@ -39,7 +61,24 @@ impl Supervisor {
 
 impl Actor for Supervisor {
     type Context = Context<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        info!("Started supervisor");
+        // TODO: start and load cache
+
+        ctx.run_interval(Duration::from_secs(self.config.ping_every), |_, ctx| {
+            ctx.address().do_send(PingBandits)
+        });
+    }
 }
+
+#[derive(Message)]
+#[rtype(result = "Result<(), SupervisorError>")]
+struct Initialize;
+
+#[derive(Message)]
+#[rtype(result = "()")]
+struct PingBandits;
 
 #[derive(Message)]
 #[rtype(result = "Vec<Uuid>")]
@@ -48,7 +87,8 @@ pub struct ListBandits;
 #[derive(Message)]
 #[rtype(result = "Uuid")]
 pub struct CreateBandit {
-    pub bandit_type: PolicyType,
+    pub bandit_id: Option<Uuid>,
+    pub policy_type: PolicyType,
 }
 
 #[derive(Message)]
@@ -103,10 +143,62 @@ pub struct GetBanditStats {
     pub bandit_id: Uuid,
 }
 
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct BanditCrashed {
-    pub bandit_id: Uuid,
+impl Handler<Initialize> for Supervisor {
+    type Result = Result<(), SupervisorError>;
+
+    fn handle(&mut self, _: Initialize, ctx: &mut Context<Self>) -> Self::Result {
+        info!("Try to recover bandits from cache");
+        let supervisor = ctx.address().clone();
+        let cache = self.cache.clone();
+
+        Box::pin(async move {
+            let states = cache
+                .send(ReadAllPolicyCache)
+                .await
+                .map_err(|_| SupervisorError::CacheNotAvailable)?;
+
+            info!("Restoring {} bandits from cache", states.len());
+            let out = states.iter().for_each(|(&bandit_id, serialized)| {
+                let policy_type: PolicyType = serde_json::from_str(&serialized)
+                    .map_err(|_| SupervisorError::BanditDeserializationError(bandit_id))?;
+                supervisor.do_send(CreateBandit {
+                    bandit_id: Some(bandit_id),
+                    policy_type,
+                });
+                Ok(())
+            });
+            Ok(())
+        })
+    }
+}
+
+impl Handler<PingBandits> for Supervisor {
+    type Result = ResponseFuture<()>;
+
+    fn handle(&mut self, _: PingBandits, _: &mut Self::Context) -> Self::Result {
+        info!("Check bandits health");
+        let bandits_to_ping = self.bandits.clone();
+
+        Box::pin(async move {
+            let futures = bandits_to_ping
+                .iter()
+                .map(|(&bandit_id, address)| async move {
+                    let future = address.send(Ping).await;
+                    (bandit_id, future)
+                });
+
+            join_all(futures)
+                .await
+                .iter()
+                .for_each(|(bandit_id, result)| match result {
+                    Ok(Pong) => (),
+                    Err(_) => {
+                        warn!("Bandit {} cannot be reached", bandit_id);
+                        // TODO: message to Supervisor to restart the bandit
+                    }
+                });
+        })
+    }
 }
 
 impl Handler<ListBandits> for Supervisor {
@@ -120,8 +212,8 @@ impl Handler<ListBandits> for Supervisor {
 impl Handler<CreateBandit> for Supervisor {
     type Result = MessageResult<CreateBandit>;
 
-    fn handle(&mut self, msg: CreateBandit, ctx: &mut Context<Self>) -> Self::Result {
-        MessageResult(self.create_bandit(msg.bandit_type, ctx))
+    fn handle(&mut self, msg: CreateBandit, _: &mut Context<Self>) -> Self::Result {
+        MessageResult(self.create_bandit(msg.bandit_id, msg.policy_type))
     }
 }
 
@@ -131,6 +223,11 @@ impl Handler<DeleteBandit> for Supervisor {
     fn handle(&mut self, msg: DeleteBandit, _: &mut Context<Self>) -> Self::Result {
         self.delete_bandit(&msg.bandit_id)
             .map_err(SupervisorOrBanditError::from)
+            .map(|_| {
+                self.cache.do_send(RemovePolicyCache {
+                    bandit_id: msg.bandit_id,
+                });
+            })
     }
 }
 
@@ -278,16 +375,5 @@ impl Handler<GetBanditStats> for Supervisor {
         } else {
             Box::pin(async move { Err(SupervisorError::BanditNotFound(msg.bandit_id).into()) })
         }
-    }
-}
-
-impl Handler<BanditCrashed> for Supervisor {
-    type Result = ();
-
-    fn handle(&mut self, msg: BanditCrashed, _: &mut Context<Self>) -> Self::Result {
-        let _bandit_id = msg.bandit_id;
-        todo!("load from storage");
-        //let actor = Bandit::new(msg.bandit_id, policy, ctx.address()).start();
-        //self.bandits.insert(msg.bandit_id, actor);
     }
 }

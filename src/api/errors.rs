@@ -3,7 +3,6 @@ use super::responses::ApiResponse;
 use crate::actors::errors::SupervisorOrBanditError;
 
 use actix_web::{error::ResponseError, http::header::ContentType, http::StatusCode, HttpResponse};
-
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -25,7 +24,7 @@ impl ResponseError for ApiResponseError {
     }
 
     fn status_code(&self) -> StatusCode {
-        match *self {
+        match self {
             ApiResponseError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
             ApiResponseError::ErrorBadRequest(_) => StatusCode::BAD_REQUEST,
             ApiResponseError::ErrorBadUuid(_) => StatusCode::BAD_REQUEST,

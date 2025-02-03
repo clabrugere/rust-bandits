@@ -1,0 +1,14 @@
+[server]
+log_level = "info"
+host = "127.0.0.1"
+port = "8080"
+
+[cache]
+path = "./cache"
+persist_every = "300"
+
+[supervisor]
+ping_every = "10"
+
+[bandit]
+cache_every = "60"

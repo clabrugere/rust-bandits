@@ -1,5 +1,6 @@
 mod actors;
 mod api;
+mod config;
 mod policies;
 
 use actix::prelude::*;
@@ -9,11 +10,14 @@ use api::routes::{
     add_arm_bandit, bandit_stats, create_bandit, delete_arm_bandit, delete_bandit, draw_bandit,
     list_bandits, reset_bandit, update_bandit, update_batch_bandit,
 };
+use config::AppConfig;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-    let supervisor = Supervisor::new().start();
+    let config = AppConfig::from_env().expect("Cannot read config");
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or(config.server.log_level));
+
+    let supervisor = Supervisor::new(config.supervisor, config.cache, config.bandit).start();
 
     HttpServer::new(move || {
         App::new()
@@ -30,7 +34,7 @@ async fn main() -> std::io::Result<()> {
             .service(update_batch_bandit)
             .service(bandit_stats)
     })
-    .bind("127.0.0.1:8080")?
+    .bind((config.server.host, config.server.port))?
     .run()
     .await
 }
