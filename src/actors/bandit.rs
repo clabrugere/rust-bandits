@@ -33,7 +33,7 @@ impl Bandit {
 
     fn cache(&self) {
         info!("Caching bandit {}", &self.id);
-        match serde_json::to_string_pretty(&self.policy) {
+        match serde_json::to_string(&self.policy) {
             Ok(serialized) => {
                 self.cache.do_send(InsertPolicyCache {
                     bandit_id: self.id,
@@ -91,7 +91,7 @@ pub struct Update {
 #[derive(Message)]
 #[rtype(result = "Result<(), BanditOrPolicyError>")]
 pub struct UpdateBatch {
-    pub updates: Vec<(usize, usize, f64)>,
+    pub updates: Vec<(u64, usize, f64)>,
 }
 
 #[derive(Message)]

@@ -85,6 +85,10 @@ struct PingBandits;
 pub struct ListBandits;
 
 #[derive(Message)]
+#[rtype(result = "()")]
+pub struct Clear;
+
+#[derive(Message)]
 #[rtype(result = "Uuid")]
 pub struct CreateBandit {
     pub bandit_id: Option<Uuid>,
@@ -134,7 +138,7 @@ pub struct UpdateBandit {
 #[rtype(result = "Result<(), SupervisorOrBanditError>")]
 pub struct UpdateBatchBandit {
     pub bandit_id: Uuid,
-    pub updates: Vec<(usize, usize, f64)>,
+    pub updates: Vec<(u64, usize, f64)>,
 }
 
 #[derive(Message)]
@@ -150,25 +154,23 @@ impl Handler<Initialize> for Supervisor {
         info!("Try to recover bandits from cache");
         let supervisor = ctx.address().clone();
         let cache = self.cache.clone();
+        Ok(())
+        // Box::pin(async move {
+        //     let states = cache
+        //         .send(ReadAllPolicyCache)
+        //         .await
+        //         .map_err(|_| SupervisorError::CacheNotAvailable)?;
 
-        Box::pin(async move {
-            let states = cache
-                .send(ReadAllPolicyCache)
-                .await
-                .map_err(|_| SupervisorError::CacheNotAvailable)?;
-
-            info!("Restoring {} bandits from cache", states.len());
-            let out = states.iter().for_each(|(&bandit_id, serialized)| {
-                let policy_type: PolicyType = serde_json::from_str(&serialized)
-                    .map_err(|_| SupervisorError::BanditDeserializationError(bandit_id))?;
-                supervisor.do_send(CreateBandit {
-                    bandit_id: Some(bandit_id),
-                    policy_type,
-                });
-                Ok(())
-            });
-            Ok(())
-        })
+        //     info!("Restoring {} bandits from cache", states.len());
+        //     let out = states.iter().for_each(|(&bandit_id, serialized)| {
+        //         let policy_type: PolicyType = serde_json::from_str(&serialized)
+        //             .map_err(|_| SupervisorError::BanditDeserializationError(bandit_id))?;
+        //         supervisor.do_send(CreateBandit {
+        //             bandit_id: Some(bandit_id),
+        //             policy_type,
+        //         });
+        //     });
+        // })
     }
 }
 
@@ -198,6 +200,14 @@ impl Handler<PingBandits> for Supervisor {
                     }
                 });
         })
+    }
+}
+
+impl Handler<Clear> for Supervisor {
+    type Result = ();
+
+    fn handle(&mut self, _: Clear, _: &mut Context<Self>) -> Self::Result {
+        self.bandits.clear();
     }
 }
 

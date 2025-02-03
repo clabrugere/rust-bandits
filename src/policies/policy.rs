@@ -32,6 +32,6 @@ pub trait Policy {
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
     fn draw(&mut self) -> Result<usize, PolicyError>;
     fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
-    fn update_batch(&mut self, updates: &[(usize, usize, f64)]) -> Result<(), PolicyError>;
+    fn update_batch(&mut self, updates: &[(u64, usize, f64)]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
 }

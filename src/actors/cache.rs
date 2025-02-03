@@ -30,7 +30,7 @@ impl PolicyCache {
 
     fn persist(&self) {
         if !&self.storage.is_empty() {
-            if let Ok(serialized) = serde_json::to_string_pretty(&self.storage) {
+            if let Ok(serialized) = serde_json::to_string(&self.storage) {
                 match write(&self.config.path, serialized) {
                     Ok(_) => info!(
                         "Persisted cache to '{}'",

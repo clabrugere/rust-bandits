@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePayload {
-    pub ts: usize,
+    pub ts: u64,
     pub arm_id: usize,
     pub reward: f64,
 }

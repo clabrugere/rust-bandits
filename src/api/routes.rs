@@ -5,7 +5,7 @@ use super::responses::{
 };
 
 use crate::actors::supervisor::{
-    AddArmBandit, CreateBandit, DeleteArmBandit, DeleteBandit, DrawBandit, GetBanditStats,
+    AddArmBandit, Clear, CreateBandit, DeleteArmBandit, DeleteBandit, DrawBandit, GetBanditStats,
     ListBandits, ResetBandit, Supervisor, UpdateBandit, UpdateBatchBandit,
 };
 use crate::policies::PolicyType;
@@ -26,6 +26,18 @@ async fn list_bandits(supervisor: Data<Addr<Supervisor>>) -> Result<impl Respond
         .map_err(|_| ApiResponseError::InternalError)?;
 
     let response = ApiResponse::with_data(Some(ListBanditsResponse { bandit_ids }));
+
+    Ok(Json(response))
+}
+
+#[post("bandit/clear")]
+async fn clear(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
+    supervisor
+        .send(Clear)
+        .await
+        .map_err(|_| ApiResponseError::InternalError)?;
+
+    let response = ApiResponse::<()>::default();
 
     Ok(Json(response))
 }

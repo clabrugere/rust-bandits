@@ -132,7 +132,7 @@ impl Policy for EpsilonGreedy {
         }
     }
 
-    fn update_batch(&mut self, updates: &[(usize, usize, f64)]) -> Result<(), PolicyError> {
+    fn update_batch(&mut self, updates: &[(u64, usize, f64)]) -> Result<(), PolicyError> {
         let mut updates = updates.to_vec();
         updates.sort_unstable_by_key(|(ts, _, _)| *ts);
         updates

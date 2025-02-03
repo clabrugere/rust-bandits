@@ -5,13 +5,24 @@ meta {
 }
 
 post {
-  url: http://127.0.0.1:8080/bandit/f522d73f-2aae-41f8-869a-13cf7c1d959d/update_batch
+  url: http://127.0.0.1:8080/bandit/da174684-e7b8-46b5-9a2d-adfeeb9f432f/update_batch
   body: json
   auth: none
 }
 
 body:json {
   {
-    "updates": [[0, 0, 0], [1, 1, 1]]
+    "updates": [
+      {
+        "ts": 0,
+        "arm_id": 0,
+        "reward": 0
+      },
+      {
+        "ts": 1,
+        "arm_id": 1,
+        "reward": 0
+      }
+    ]
   }
 }
