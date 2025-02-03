@@ -206,7 +206,7 @@ impl Handler<PingBandits> for Supervisor {
 impl Handler<Clear> for Supervisor {
     type Result = ();
 
-    fn handle(&mut self, _: Clear, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: Clear, _: &mut Self::Context) -> Self::Result {
         self.bandits.clear();
     }
 }
@@ -214,7 +214,7 @@ impl Handler<Clear> for Supervisor {
 impl Handler<ListBandits> for Supervisor {
     type Result = MessageResult<ListBandits>;
 
-    fn handle(&mut self, _: ListBandits, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: ListBandits, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.bandits.keys().cloned().collect())
     }
 }
@@ -222,7 +222,7 @@ impl Handler<ListBandits> for Supervisor {
 impl Handler<CreateBandit> for Supervisor {
     type Result = MessageResult<CreateBandit>;
 
-    fn handle(&mut self, msg: CreateBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: CreateBandit, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.create_bandit(msg.bandit_id, msg.policy_type.into_inner()))
     }
 }
@@ -230,7 +230,7 @@ impl Handler<CreateBandit> for Supervisor {
 impl Handler<DeleteBandit> for Supervisor {
     type Result = Result<(), SupervisorOrBanditError>;
 
-    fn handle(&mut self, msg: DeleteBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: DeleteBandit, _: &mut Self::Context) -> Self::Result {
         self.delete_bandit(&msg.bandit_id)
             .map_err(SupervisorOrBanditError::from)
             .map(|_| {
@@ -244,7 +244,7 @@ impl Handler<DeleteBandit> for Supervisor {
 impl Handler<ResetBandit> for Supervisor {
     type Result = ResponseFuture<Result<(), SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: ResetBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ResetBandit, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 actor
@@ -261,7 +261,7 @@ impl Handler<ResetBandit> for Supervisor {
 impl Handler<AddArmBandit> for Supervisor {
     type Result = ResponseFuture<Result<usize, SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: AddArmBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: AddArmBandit, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 actor
@@ -278,7 +278,7 @@ impl Handler<AddArmBandit> for Supervisor {
 impl Handler<DeleteArmBandit> for Supervisor {
     type Result = ResponseFuture<Result<(), SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: DeleteArmBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: DeleteArmBandit, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 actor
@@ -300,7 +300,7 @@ impl Handler<DeleteArmBandit> for Supervisor {
 impl Handler<DrawBandit> for Supervisor {
     type Result = ResponseFuture<Result<usize, SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: DrawBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: DrawBandit, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 actor
@@ -322,7 +322,7 @@ impl Handler<DrawBandit> for Supervisor {
 impl Handler<UpdateBandit> for Supervisor {
     type Result = ResponseFuture<Result<(), SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: UpdateBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UpdateBandit, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 actor
@@ -347,7 +347,7 @@ impl Handler<UpdateBandit> for Supervisor {
 impl Handler<UpdateBatchBandit> for Supervisor {
     type Result = ResponseFuture<Result<(), SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: UpdateBatchBandit, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UpdateBatchBandit, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 actor
@@ -371,7 +371,7 @@ impl Handler<UpdateBatchBandit> for Supervisor {
 impl Handler<GetBanditStats> for Supervisor {
     type Result = ResponseFuture<Result<PolicyStats, SupervisorOrBanditError>>;
 
-    fn handle(&mut self, msg: GetBanditStats, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: GetBanditStats, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.bandits.get(&msg.bandit_id).cloned() {
             Box::pin(async move {
                 let stats = actor.send(GetStats).await.map_err(|_| {

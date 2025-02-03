@@ -46,7 +46,7 @@ impl PolicyCache {
 impl Actor for PolicyCache {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Context<Self>) {
+    fn started(&mut self, ctx: &mut Self::Context) {
         info!("Started policy cache");
         let persist_every = Duration::from_secs(self.config.persist_every);
         ctx.run_interval(persist_every, |cache, _| {
@@ -81,7 +81,7 @@ pub struct ReadFullPolicyCache;
 impl Handler<InsertPolicyCache> for PolicyCache {
     type Result = ();
 
-    fn handle(&mut self, msg: InsertPolicyCache, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: InsertPolicyCache, _: &mut Self::Context) -> Self::Result {
         self.storage.insert(msg.bandit_id, msg.serialized);
     }
 }
@@ -89,7 +89,7 @@ impl Handler<InsertPolicyCache> for PolicyCache {
 impl Handler<RemovePolicyCache> for PolicyCache {
     type Result = ();
 
-    fn handle(&mut self, msg: RemovePolicyCache, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: RemovePolicyCache, _: &mut Self::Context) -> Self::Result {
         self.storage.remove(&msg.bandit_id);
     }
 }
@@ -97,7 +97,7 @@ impl Handler<RemovePolicyCache> for PolicyCache {
 impl Handler<ReadPolicyCache> for PolicyCache {
     type Result = Option<String>;
 
-    fn handle(&mut self, msg: ReadPolicyCache, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: ReadPolicyCache, _: &mut Self::Context) -> Self::Result {
         self.storage.get(&msg.bandit_id).cloned()
     }
 }

@@ -48,7 +48,7 @@ impl Bandit {
 impl Actor for Bandit {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Context<Self>) {
+    fn started(&mut self, ctx: &mut Self::Context) {
         info!("Started bandit {}", self.id);
         ctx.run_interval(Duration::from_secs(self.cache_every), |bandit, _| {
             bandit.cache();
@@ -109,7 +109,7 @@ impl Handler<Ping> for Bandit {
 impl Handler<Reset> for Bandit {
     type Result = ();
 
-    fn handle(&mut self, _: Reset, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: Reset, _: &mut Self::Context) -> Self::Result {
         self.policy.reset()
     }
 }
@@ -117,7 +117,7 @@ impl Handler<Reset> for Bandit {
 impl Handler<AddArm> for Bandit {
     type Result = usize;
 
-    fn handle(&mut self, _: AddArm, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: AddArm, _: &mut Self::Context) -> Self::Result {
         self.policy.add_arm()
     }
 }
@@ -125,7 +125,7 @@ impl Handler<AddArm> for Bandit {
 impl Handler<DeleteArm> for Bandit {
     type Result = Result<(), BanditOrPolicyError>;
 
-    fn handle(&mut self, msg: DeleteArm, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: DeleteArm, _: &mut Self::Context) -> Self::Result {
         self.policy
             .delete_arm(msg.arm_id)
             .map_err(BanditOrPolicyError::from)
@@ -135,7 +135,7 @@ impl Handler<DeleteArm> for Bandit {
 impl Handler<Draw> for Bandit {
     type Result = Result<usize, BanditOrPolicyError>;
 
-    fn handle(&mut self, _: Draw, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: Draw, _: &mut Self::Context) -> Self::Result {
         self.policy.draw().map_err(BanditOrPolicyError::from)
     }
 }
@@ -143,7 +143,7 @@ impl Handler<Draw> for Bandit {
 impl Handler<Update> for Bandit {
     type Result = Result<(), BanditOrPolicyError>;
 
-    fn handle(&mut self, msg: Update, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: Update, _: &mut Self::Context) -> Self::Result {
         self.policy
             .update(msg.arm_id, msg.reward)
             .map_err(BanditOrPolicyError::from)
@@ -153,7 +153,7 @@ impl Handler<Update> for Bandit {
 impl Handler<UpdateBatch> for Bandit {
     type Result = Result<(), BanditOrPolicyError>;
 
-    fn handle(&mut self, msg: UpdateBatch, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, msg: UpdateBatch, _: &mut Self::Context) -> Self::Result {
         self.policy
             .update_batch(&msg.updates)
             .map_err(BanditOrPolicyError::from)
@@ -163,7 +163,7 @@ impl Handler<UpdateBatch> for Bandit {
 impl Handler<GetStats> for Bandit {
     type Result = MessageResult<GetStats>;
 
-    fn handle(&mut self, _: GetStats, _: &mut Context<Self>) -> Self::Result {
+    fn handle(&mut self, _: GetStats, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.policy.stats())
     }
 }
