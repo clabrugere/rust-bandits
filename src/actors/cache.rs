@@ -76,7 +76,7 @@ pub struct ReadPolicyCache {
 
 #[derive(Message)]
 #[rtype(result = "HashMap<Uuid, String>")]
-pub struct ReadAllPolicyCache;
+pub struct ReadFullPolicyCache;
 
 impl Handler<InsertPolicyCache> for PolicyCache {
     type Result = ();
@@ -102,10 +102,10 @@ impl Handler<ReadPolicyCache> for PolicyCache {
     }
 }
 
-impl Handler<ReadAllPolicyCache> for PolicyCache {
-    type Result = MessageResult<ReadAllPolicyCache>;
+impl Handler<ReadFullPolicyCache> for PolicyCache {
+    type Result = MessageResult<ReadFullPolicyCache>;
 
-    fn handle(&mut self, _: ReadAllPolicyCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: ReadFullPolicyCache, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.storage.clone())
     }
 }

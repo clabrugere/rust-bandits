@@ -29,13 +29,7 @@ impl<'de> Deserialize<'de> for MaybeSeededRng {
     where
         D: Deserializer<'de>,
     {
-        let seed: Option<u64> = Deserialize::deserialize(deserializer)?;
-        let rng = if let Some(seed) = seed {
-            SmallRng::seed_from_u64(seed)
-        } else {
-            SmallRng::from_entropy()
-        };
-
-        Ok(MaybeSeededRng { seed, rng })
+        let seed = Deserialize::deserialize(deserializer)?;
+        Ok(Self::new(seed))
     }
 }

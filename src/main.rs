@@ -5,7 +5,7 @@ mod policies;
 
 use actix::prelude::*;
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
-use actors::supervisor::Supervisor;
+use actors::{cache::PolicyCache, supervisor::Supervisor};
 use api::routes::{
     add_arm_bandit, bandit_stats, clear, create_bandit, delete_arm_bandit, delete_bandit,
     draw_bandit, list_bandits, reset_bandit, update_bandit, update_batch_bandit,
@@ -17,7 +17,8 @@ async fn main() -> std::io::Result<()> {
     let config = AppConfig::from_env().expect("Cannot read config");
     env_logger::init_from_env(env_logger::Env::new().default_filter_or(config.server.log_level));
 
-    let supervisor = Supervisor::new(config.supervisor, config.cache, config.bandit).start();
+    let cache = PolicyCache::new(config.cache).start();
+    let supervisor = Supervisor::new(config.supervisor, config.bandit, cache.clone()).start();
 
     HttpServer::new(move || {
         App::new()

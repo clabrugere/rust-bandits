@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 pub struct Bandit {
     id: Uuid,
-    policy: Box<dyn Policy + Send>,
+    policy: Box<dyn Policy>,
     cache: Addr<PolicyCache>,
     cache_every: u64,
 }
@@ -19,7 +19,7 @@ pub struct Bandit {
 impl Bandit {
     pub fn new(
         id: Uuid,
-        policy: Box<dyn Policy + Send>,
+        policy: Box<dyn Policy>,
         cache: Addr<PolicyCache>,
         cache_every: u64,
     ) -> Self {

@@ -5,10 +5,10 @@ port = "8080"
 
 [cache]
 path = "./cache"
-persist_every = "300"
+persist_every = "60"
 
 [supervisor]
-ping_every = "10"
+ping_every = "30"
 
 [bandit]
 cache_every = "60"

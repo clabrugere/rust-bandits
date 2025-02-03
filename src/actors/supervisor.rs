@@ -1,11 +1,11 @@
 use super::bandit::{
     AddArm, Bandit, DeleteArm, Draw, GetStats, Ping, Pong, Reset, Update, UpdateBatch,
 };
-use super::cache::{PolicyCache, ReadAllPolicyCache, RemovePolicyCache};
+use super::cache::{PolicyCache, ReadFullPolicyCache, RemovePolicyCache};
 use super::errors::{SupervisorError, SupervisorOrBanditError};
 
-use crate::config::{BanditConfig, PolicyCacheConfig, SupervisorConfig};
-use crate::policies::{PolicyStats, PolicyType};
+use crate::config::{BanditConfig, SupervisorConfig};
+use crate::policies::{Policy, PolicyStats, PolicyType};
 
 use actix::prelude::*;
 use futures_util::future::join_all;
@@ -24,22 +24,54 @@ pub struct Supervisor {
 impl Supervisor {
     pub fn new(
         config: SupervisorConfig,
-        cache_config: PolicyCacheConfig,
         bandit_config: BanditConfig,
+        cache: Addr<PolicyCache>,
     ) -> Self {
         Self {
             config,
             bandits: HashMap::new(),
             bandit_config,
-            cache: PolicyCache::new(cache_config.clone()).start(),
+            cache,
         }
     }
 
-    pub fn create_bandit(&mut self, bandit_id: Option<Uuid>, policy_type: PolicyType) -> Uuid {
+    fn restore_bandit(
+        &mut self,
+        bandit_id: Uuid,
+        serialized: &str,
+    ) -> Result<(), serde_json::Error> {
+        let policy = serde_json::from_str(serialized)?;
+        self.create_bandit(Some(bandit_id), policy);
+
+        info!("Loaded bandit {} from cache", bandit_id);
+        Ok(())
+    }
+
+    fn initialize_from_storage(&self, ctx: &mut Context<Self>) {
+        self.cache
+            .send(ReadFullPolicyCache)
+            .into_actor(self)
+            .then(|storage, supervisor, _| {
+                match storage {
+                    Ok(policy_states) => {
+                        policy_states.iter().for_each(|(&bandit_id, serialized)| {
+                            if let Err(err) = supervisor.restore_bandit(bandit_id, serialized) {
+                                warn!("Could not load bandit {} from storage: {}", bandit_id, err);
+                            }
+                        });
+                    }
+                    Err(_) => warn!("Could not fetch the cache."),
+                }
+                fut::ready(())
+            })
+            .wait(ctx);
+    }
+
+    pub fn create_bandit(&mut self, bandit_id: Option<Uuid>, policy: Box<dyn Policy>) -> Uuid {
         let bandit_id = bandit_id.unwrap_or(Uuid::new_v4());
         let actor = Bandit::new(
             bandit_id,
-            policy_type.into_inner(),
+            policy,
             self.cache.clone(),
             self.bandit_config.cache_every,
         )
@@ -64,17 +96,12 @@ impl Actor for Supervisor {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         info!("Started supervisor");
-        // TODO: start and load cache
-
+        self.initialize_from_storage(ctx);
         ctx.run_interval(Duration::from_secs(self.config.ping_every), |_, ctx| {
             ctx.address().do_send(PingBandits)
         });
     }
 }
-
-#[derive(Message)]
-#[rtype(result = "Result<(), SupervisorError>")]
-struct Initialize;
 
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -147,33 +174,6 @@ pub struct GetBanditStats {
     pub bandit_id: Uuid,
 }
 
-impl Handler<Initialize> for Supervisor {
-    type Result = Result<(), SupervisorError>;
-
-    fn handle(&mut self, _: Initialize, ctx: &mut Context<Self>) -> Self::Result {
-        info!("Try to recover bandits from cache");
-        let supervisor = ctx.address().clone();
-        let cache = self.cache.clone();
-        Ok(())
-        // Box::pin(async move {
-        //     let states = cache
-        //         .send(ReadAllPolicyCache)
-        //         .await
-        //         .map_err(|_| SupervisorError::CacheNotAvailable)?;
-
-        //     info!("Restoring {} bandits from cache", states.len());
-        //     let out = states.iter().for_each(|(&bandit_id, serialized)| {
-        //         let policy_type: PolicyType = serde_json::from_str(&serialized)
-        //             .map_err(|_| SupervisorError::BanditDeserializationError(bandit_id))?;
-        //         supervisor.do_send(CreateBandit {
-        //             bandit_id: Some(bandit_id),
-        //             policy_type,
-        //         });
-        //     });
-        // })
-    }
-}
-
 impl Handler<PingBandits> for Supervisor {
     type Result = ResponseFuture<()>;
 
@@ -223,7 +223,7 @@ impl Handler<CreateBandit> for Supervisor {
     type Result = MessageResult<CreateBandit>;
 
     fn handle(&mut self, msg: CreateBandit, _: &mut Context<Self>) -> Self::Result {
-        MessageResult(self.create_bandit(msg.bandit_id, msg.policy_type))
+        MessageResult(self.create_bandit(msg.bandit_id, msg.policy_type.into_inner()))
     }
 }
 

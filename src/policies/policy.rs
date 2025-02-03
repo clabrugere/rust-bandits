@@ -16,7 +16,7 @@ pub enum PolicyType {
 }
 
 impl PolicyType {
-    pub fn into_inner(self) -> Box<dyn Policy + Send> {
+    pub fn into_inner(self) -> Box<dyn Policy> {
         match self {
             PolicyType::EpsilonGreedy { epsilon, seed } => {
                 Box::new(EpsilonGreedy::new(epsilon, seed))

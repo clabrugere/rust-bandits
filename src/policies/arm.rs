@@ -10,7 +10,7 @@ pub trait Arm: Default + Eq + PartialEq + Ord + PartialOrd {
 
 #[derive(Debug, Serialize)]
 pub struct ArmStats {
-    pub pulls: usize,
+    pub pulls: u64,
     pub rewards: f64,
     pub is_active: bool,
 }

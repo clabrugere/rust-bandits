@@ -9,10 +9,6 @@ pub enum SupervisorError {
     BanditNotAvailable(Uuid),
     #[error("Bandit {0} not found")]
     BanditNotFound(Uuid),
-    #[error("Cache not available")]
-    CacheNotAvailable,
-    #[error("Cound not deserialize bandit {0}")]
-    BanditDeserializationError(Uuid),
 }
 
 #[derive(Debug, Error)]

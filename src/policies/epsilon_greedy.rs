@@ -9,10 +9,10 @@ use std::cmp::Ordering;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedyArm {
-    pub(super) value: f64,
-    pub(super) pulls: usize,
-    pub(super) rewards: f64,
-    pub(super) is_active: bool,
+    value: f64,
+    pulls: u64,
+    rewards: f64,
+    is_active: bool,
 }
 
 impl Default for EpsilonGreedyArm {
