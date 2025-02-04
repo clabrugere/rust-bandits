@@ -1,13 +1,13 @@
 use super::arm::{Arm, ArmStats, Arms};
 use super::errors::PolicyError;
-use super::policy::{Policy, PolicyStats};
+use super::policy::{CloneBoxedPolicy, Policy, PolicyStats};
 use super::rng::MaybeSeededRng;
 
 use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EpsilonGreedyArm {
     value: f64,
     pulls: u64,
@@ -64,7 +64,7 @@ impl Arm for EpsilonGreedyArm {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EpsilonGreedy {
     arms: Arms<EpsilonGreedyArm>,
     epsilon: f64,
@@ -78,6 +78,12 @@ impl EpsilonGreedy {
             epsilon,
             rng: MaybeSeededRng::new(seed),
         }
+    }
+}
+
+impl CloneBoxedPolicy for EpsilonGreedy {
+    fn clone_box(&self) -> Box<dyn Policy + Send> {
+        Box::new(self.clone())
     }
 }
 

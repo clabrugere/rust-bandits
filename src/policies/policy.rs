@@ -16,7 +16,7 @@ pub enum PolicyType {
 }
 
 impl PolicyType {
-    pub fn into_inner(self) -> Box<dyn Policy> {
+    pub fn into_inner(self) -> Box<dyn Policy + Send> {
         match self {
             PolicyType::EpsilonGreedy { epsilon, seed } => {
                 Box::new(EpsilonGreedy::new(epsilon, seed))
@@ -25,8 +25,19 @@ impl PolicyType {
     }
 }
 
+// to allow cloning the dispatched type
+impl Clone for Box<dyn Policy + Send> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
+}
+
+pub trait CloneBoxedPolicy {
+    fn clone_box(&self) -> Box<dyn Policy + Send>;
+}
+
 #[typetag::serde(tag = "type")]
-pub trait Policy {
+pub trait Policy: Send + CloneBoxedPolicy {
     fn reset(&mut self);
     fn add_arm(&mut self) -> usize;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;

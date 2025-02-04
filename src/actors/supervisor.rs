@@ -10,7 +10,6 @@ use crate::policies::{Policy, PolicyStats, PolicyType};
 use actix::prelude::*;
 use futures_util::future::join_all;
 use log::{info, warn};
-use serde_json;
 use std::{collections::HashMap, time::Duration};
 use uuid::Uuid;
 
@@ -35,18 +34,6 @@ impl Supervisor {
         }
     }
 
-    fn restore_bandit(
-        &mut self,
-        bandit_id: Uuid,
-        serialized: &str,
-    ) -> Result<(), serde_json::Error> {
-        let policy = serde_json::from_str(serialized)?;
-        self.create_bandit(Some(bandit_id), policy);
-
-        info!("Loaded bandit {} from cache", bandit_id);
-        Ok(())
-    }
-
     fn initialize_from_storage(&self, ctx: &mut Context<Self>) {
         self.cache
             .send(ReadFullPolicyCache)
@@ -54,10 +41,8 @@ impl Supervisor {
             .then(|storage, supervisor, _| {
                 match storage {
                     Ok(policy_states) => {
-                        policy_states.iter().for_each(|(&bandit_id, serialized)| {
-                            if let Err(err) = supervisor.restore_bandit(bandit_id, serialized) {
-                                warn!("Could not load bandit {} from storage: {}", bandit_id, err);
-                            }
+                        policy_states.iter().for_each(|(bandit_id, policy)| {
+                            supervisor.create_bandit(Some(*bandit_id), policy.clone_box());
                         });
                     }
                     Err(_) => warn!("Could not fetch the cache."),
@@ -67,7 +52,11 @@ impl Supervisor {
             .wait(ctx);
     }
 
-    pub fn create_bandit(&mut self, bandit_id: Option<Uuid>, policy: Box<dyn Policy>) -> Uuid {
+    pub fn create_bandit(
+        &mut self,
+        bandit_id: Option<Uuid>,
+        policy: Box<dyn Policy + Send>,
+    ) -> Uuid {
         let bandit_id = bandit_id.unwrap_or(Uuid::new_v4());
         let actor = Bandit::new(
             bandit_id,

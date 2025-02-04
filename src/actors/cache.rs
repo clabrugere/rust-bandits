@@ -1,4 +1,4 @@
-use crate::config::PolicyCacheConfig;
+use crate::{config::PolicyCacheConfig, policies::Policy};
 
 use actix::prelude::*;
 use log::{info, warn};
@@ -10,9 +10,8 @@ use std::{
 };
 use uuid::Uuid;
 
-#[derive(Debug)]
 pub struct PolicyCache {
-    storage: HashMap<Uuid, String>,
+    storage: HashMap<Uuid, Box<dyn Policy + Send>>,
     config: PolicyCacheConfig,
 }
 
@@ -59,7 +58,7 @@ impl Actor for PolicyCache {
 #[rtype(result = "()")]
 pub struct InsertPolicyCache {
     pub bandit_id: Uuid,
-    pub serialized: String,
+    pub policy: Box<dyn Policy + Send>,
 }
 
 #[derive(Message)]
@@ -69,20 +68,20 @@ pub struct RemovePolicyCache {
 }
 
 #[derive(Message)]
-#[rtype(result = "Option<String>")]
+#[rtype(result = "Option<Box<dyn Policy + Send>>")]
 pub struct ReadPolicyCache {
     pub bandit_id: Uuid,
 }
 
 #[derive(Message)]
-#[rtype(result = "HashMap<Uuid, String>")]
+#[rtype(result = "HashMap<Uuid, Box<dyn Policy + Send>>")]
 pub struct ReadFullPolicyCache;
 
 impl Handler<InsertPolicyCache> for PolicyCache {
     type Result = ();
 
     fn handle(&mut self, msg: InsertPolicyCache, _: &mut Self::Context) -> Self::Result {
-        self.storage.insert(msg.bandit_id, msg.serialized);
+        self.storage.insert(msg.bandit_id, msg.policy);
     }
 }
 
@@ -95,7 +94,7 @@ impl Handler<RemovePolicyCache> for PolicyCache {
 }
 
 impl Handler<ReadPolicyCache> for PolicyCache {
-    type Result = Option<String>;
+    type Result = Option<Box<dyn Policy + Send>>;
 
     fn handle(&mut self, msg: ReadPolicyCache, _: &mut Self::Context) -> Self::Result {
         self.storage.get(&msg.bandit_id).cloned()

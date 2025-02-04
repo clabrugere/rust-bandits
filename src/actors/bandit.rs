@@ -4,14 +4,13 @@ use super::errors::BanditOrPolicyError;
 use crate::policies::{Policy, PolicyStats};
 
 use actix::prelude::*;
-use log::{info, warn};
-use serde_json;
+use log::info;
 use std::time::Duration;
 use uuid::Uuid;
 
 pub struct Bandit {
     id: Uuid,
-    policy: Box<dyn Policy>,
+    policy: Box<dyn Policy + Send>,
     cache: Addr<PolicyCache>,
     cache_every: u64,
 }
@@ -19,7 +18,7 @@ pub struct Bandit {
 impl Bandit {
     pub fn new(
         id: Uuid,
-        policy: Box<dyn Policy>,
+        policy: Box<dyn Policy + Send>,
         cache: Addr<PolicyCache>,
         cache_every: u64,
     ) -> Self {
@@ -33,15 +32,10 @@ impl Bandit {
 
     fn cache(&self) {
         info!("Caching bandit {}", &self.id);
-        match serde_json::to_string(&self.policy) {
-            Ok(serialized) => {
-                self.cache.do_send(InsertPolicyCache {
-                    bandit_id: self.id,
-                    serialized,
-                });
-            }
-            Err(err) => warn!("Error while serializing bandit {}: {}", self.id, err),
-        }
+        self.cache.do_send(InsertPolicyCache {
+            bandit_id: self.id,
+            policy: self.policy.clone_box(),
+        });
     }
 }
 
