@@ -1,8 +1,8 @@
 use super::bandit::{
     AddArm, Bandit, DeleteArm, Draw, GetStats, Ping, Pong, Reset, Update, UpdateBatch,
 };
-use super::cache::{PolicyCache, ReadFullPolicyCache, RemovePolicyCache};
 use super::errors::{SupervisorError, SupervisorOrBanditError};
+use super::policy_cache::{PolicyCache, ReadFullPolicyCache, RemovePolicyCache};
 
 use crate::config::{BanditConfig, SupervisorConfig};
 use crate::policies::{Policy, PolicyStats, PolicyType};
@@ -45,7 +45,7 @@ impl Supervisor {
                             supervisor.create_bandit(Some(*bandit_id), policy.clone_box());
                         });
                     }
-                    Err(_) => warn!("Could not fetch the cache."),
+                    Err(err) => warn!("Storage not available: {}", err),
                 }
                 fut::ready(())
             })
@@ -84,7 +84,7 @@ impl Actor for Supervisor {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Started supervisor");
+        info!("Starting supervisor");
         self.initialize_from_storage(ctx);
         ctx.run_interval(Duration::from_secs(self.config.ping_every), |_, ctx| {
             ctx.address().do_send(PingBandits)
@@ -167,24 +167,22 @@ impl Handler<PingBandits> for Supervisor {
     type Result = ResponseFuture<()>;
 
     fn handle(&mut self, _: PingBandits, _: &mut Self::Context) -> Self::Result {
-        info!("Check bandits health");
-        let bandits_to_ping = self.bandits.clone();
+        info!("Checking bandits health");
+        let bandits = self.bandits.clone();
 
         Box::pin(async move {
-            let futures = bandits_to_ping
-                .iter()
-                .map(|(&bandit_id, address)| async move {
-                    let future = address.send(Ping).await;
-                    (bandit_id, future)
-                });
+            let futures = bandits.iter().map(|(&bandit_id, address)| async move {
+                let future = address.send(Ping).await;
+                (bandit_id, future)
+            });
 
             join_all(futures)
                 .await
                 .iter()
                 .for_each(|(bandit_id, result)| match result {
                     Ok(Pong) => (),
-                    Err(_) => {
-                        warn!("Bandit {} cannot be reached", bandit_id);
+                    Err(err) => {
+                        warn!("Bandit {} not available: {}", bandit_id, err);
                         // TODO: message to Supervisor to restart the bandit
                     }
                 });

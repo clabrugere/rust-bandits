@@ -1,5 +1,5 @@
-use super::cache::{InsertPolicyCache, PolicyCache};
 use super::errors::BanditOrPolicyError;
+use super::policy_cache::{InsertPolicyCache, PolicyCache};
 
 use crate::policies::{Policy, PolicyStats};
 
@@ -43,7 +43,7 @@ impl Actor for Bandit {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Started bandit {}", self.id);
+        info!("Starting bandit {}", self.id);
         ctx.run_interval(Duration::from_secs(self.cache_every), |bandit, _| {
             bandit.cache();
         });

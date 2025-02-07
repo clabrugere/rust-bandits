@@ -29,14 +29,17 @@ impl PolicyCache {
 
     fn persist(&self) {
         if !&self.storage.is_empty() {
-            if let Ok(serialized) = serde_json::to_string(&self.storage) {
-                match write(&self.config.path, serialized) {
-                    Ok(_) => info!(
-                        "Persisted cache to '{}'",
-                        self.config.path.to_str().unwrap_or_default()
-                    ),
-                    Err(err) => warn!("Error while persisting cache to disk: {}", err),
+            info!(
+                "Persisting cache to '{}'",
+                self.config.path.to_str().unwrap_or_default()
+            );
+            match serde_json::to_string(&self.storage) {
+                Ok(serialized) => {
+                    if let Err(err) = write(&self.config.path, serialized) {
+                        warn!("Error while persisting cache to disk: {}", err);
+                    }
                 }
+                Err(err) => warn!("Error while serializing cache: {}", err),
             }
         }
     }
@@ -46,7 +49,7 @@ impl Actor for PolicyCache {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Started policy cache");
+        info!("Starting policy cache");
         let persist_every = Duration::from_secs(self.config.persist_every);
         ctx.run_interval(persist_every, |cache, _| {
             cache.persist();

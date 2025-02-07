@@ -1,4 +1,4 @@
 pub mod bandit;
-pub mod cache;
 pub mod errors;
+pub mod policy_cache;
 pub mod supervisor;
