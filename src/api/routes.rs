@@ -18,8 +18,8 @@ use actix_web::{
 };
 use uuid::Uuid;
 
-#[get("bandit/list")]
-async fn list_bandits(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
+#[get("list")]
+async fn list(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
     let bandit_ids = supervisor
         .send(ListBandits)
         .await
@@ -30,7 +30,7 @@ async fn list_bandits(supervisor: Data<Addr<Supervisor>>) -> Result<impl Respond
     Ok(Json(response))
 }
 
-#[post("bandit/clear")]
+#[post("clear")]
 async fn clear(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
     supervisor
         .send(Clear)
@@ -42,8 +42,8 @@ async fn clear(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
     Ok(Json(response))
 }
 
-#[post("bandit/create")]
-async fn create_bandit(
+#[post("create")]
+async fn create(
     supervisor: Data<Addr<Supervisor>>,
     policy_type: Json<PolicyType>,
 ) -> Result<impl Responder> {
@@ -60,8 +60,8 @@ async fn create_bandit(
     Ok(Json(response))
 }
 
-#[post("bandit/{bandit_id}/reset")]
-async fn reset_bandit(
+#[post("{bandit_id}/reset")]
+async fn reset(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
 ) -> Result<impl Responder> {
@@ -78,8 +78,8 @@ async fn reset_bandit(
     Ok(Json(response))
 }
 
-#[post("bandit/{bandit_id}/delete")]
-async fn delete_bandit(
+#[post("{bandit_id}/delete")]
+async fn delete(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
 ) -> Result<impl Responder> {
@@ -96,8 +96,8 @@ async fn delete_bandit(
     Ok(Json(response))
 }
 
-#[post("bandit/{bandit_id}/add_arm")]
-async fn add_arm_bandit(
+#[post("{bandit_id}/add_arm")]
+async fn add_arm(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
 ) -> Result<impl Responder> {
@@ -114,8 +114,8 @@ async fn add_arm_bandit(
     Ok(Json(response))
 }
 
-#[post("bandit/{bandit_id}/delete_arm/{arm_id}")]
-async fn delete_arm_bandit(
+#[post("{bandit_id}/delete_arm/{arm_id}")]
+async fn delete_arm(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
     arm_id: Path<usize>,
@@ -134,8 +134,8 @@ async fn delete_arm_bandit(
     Ok(Json(response))
 }
 
-#[get("bandit/{bandit_id}/draw")]
-async fn draw_bandit(
+#[get("{bandit_id}/draw")]
+async fn draw(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
 ) -> Result<impl Responder> {
@@ -152,8 +152,8 @@ async fn draw_bandit(
     Ok(Json(response))
 }
 
-#[post("bandit/{bandit_id}/update")]
-async fn update_bandit(
+#[post("{bandit_id}/update")]
+async fn update(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
     payload: Json<UpdatePayload>,
@@ -175,8 +175,8 @@ async fn update_bandit(
     Ok(Json(response))
 }
 
-#[post("bandit/{bandit_id}/update_batch")]
-async fn update_batch_bandit(
+#[post("{bandit_id}/update_batch")]
+async fn update_batch(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
     payload: Json<UpdateBatchPayload>,
@@ -198,8 +198,8 @@ async fn update_batch_bandit(
     Ok(Json(response))
 }
 
-#[get("bandit/{bandit_id}/stats")]
-async fn bandit_stats(
+#[get("{bandit_id}/stats")]
+async fn stats(
     supervisor: Data<Addr<Supervisor>>,
     bandit_id: Path<String>,
 ) -> Result<impl Responder> {

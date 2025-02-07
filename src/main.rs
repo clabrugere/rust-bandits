@@ -4,17 +4,21 @@ mod config;
 mod policies;
 
 use actix::prelude::*;
-use actix_web::{middleware::Logger, web::Data, App, HttpServer};
-use actors::{cache::PolicyCache, supervisor::Supervisor};
+use actix_web::{
+    middleware::Logger,
+    web::{scope, Data},
+    App, HttpServer,
+};
+use actors::{policy_cache::PolicyCache, supervisor::Supervisor};
 use api::routes::{
-    add_arm_bandit, bandit_stats, clear, create_bandit, delete_arm_bandit, delete_bandit,
-    draw_bandit, list_bandits, reset_bandit, update_bandit, update_batch_bandit,
+    add_arm, clear, create, delete, delete_arm, draw, list, reset, stats, update, update_batch,
 };
 use config::AppConfig;
+use std::io::Error;
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    let config = AppConfig::from_env().expect("Cannot read config");
+async fn main() -> Result<(), Error> {
+    let config = AppConfig::from_env().expect("Failed to load configuration");
     env_logger::init_from_env(env_logger::Env::new().default_filter_or(config.server.log_level));
 
     let cache = PolicyCache::new(config.cache).start();
@@ -24,17 +28,20 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(Data::new(supervisor.clone()))
             .wrap(Logger::default())
-            .service(list_bandits)
-            .service(clear)
-            .service(create_bandit)
-            .service(reset_bandit)
-            .service(delete_bandit)
-            .service(add_arm_bandit)
-            .service(delete_arm_bandit)
-            .service(draw_bandit)
-            .service(update_bandit)
-            .service(update_batch_bandit)
-            .service(bandit_stats)
+            .service(
+                scope("/bandits")
+                    .service(list)
+                    .service(clear)
+                    .service(create)
+                    .service(reset)
+                    .service(delete)
+                    .service(add_arm)
+                    .service(delete_arm)
+                    .service(draw)
+                    .service(update)
+                    .service(update_batch)
+                    .service(stats),
+            )
     })
     .bind((config.server.host, config.server.port))?
     .run()
