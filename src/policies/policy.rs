@@ -25,7 +25,6 @@ impl PolicyType {
     }
 }
 
-// to allow cloning the dispatched type
 impl Clone for Box<dyn Policy + Send> {
     fn clone(&self) -> Self {
         self.clone_box()

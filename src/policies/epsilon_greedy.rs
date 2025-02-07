@@ -1,4 +1,4 @@
-use super::arm::{Arm, ArmStats, Arms};
+use super::arm::{Arm, ArmStats};
 use super::errors::PolicyError;
 use super::policy::{CloneBoxedPolicy, Policy, PolicyStats};
 use super::rng::MaybeSeededRng;
@@ -6,12 +6,12 @@ use super::rng::MaybeSeededRng;
 use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EpsilonGreedyArm {
     value: f64,
     pulls: u64,
-    rewards: f64,
     is_active: bool,
 }
 
@@ -20,7 +20,6 @@ impl Default for EpsilonGreedyArm {
         Self {
             value: 0.0,
             pulls: 0,
-            rewards: 0.0,
             is_active: true,
         }
     }
@@ -52,13 +51,12 @@ impl Arm for EpsilonGreedyArm {
     fn reset(&mut self) {
         self.value = 0.0;
         self.pulls = 0;
-        self.rewards = 0.0;
     }
 
     fn stats(&self) -> ArmStats {
         ArmStats {
             pulls: self.pulls,
-            rewards: self.rewards,
+            mean_reward: self.value,
             is_active: self.is_active,
         }
     }
@@ -66,7 +64,7 @@ impl Arm for EpsilonGreedyArm {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct EpsilonGreedy {
-    arms: Arms<EpsilonGreedyArm>,
+    arms: HashMap<usize, EpsilonGreedyArm>,
     epsilon: f64,
     rng: MaybeSeededRng,
 }
@@ -74,7 +72,7 @@ pub struct EpsilonGreedy {
 impl EpsilonGreedy {
     pub fn new(epsilon: f64, seed: Option<u64>) -> Self {
         Self {
-            arms: Arms::new(),
+            arms: HashMap::new(),
             epsilon,
             rng: MaybeSeededRng::new(seed),
         }
@@ -129,7 +127,6 @@ impl Policy for EpsilonGreedy {
     fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
         if let Some(arm) = self.arms.get_mut(&arm_id) {
             arm.pulls += 1;
-            arm.rewards += reward;
             arm.value += (reward - arm.value) / (arm.pulls as f64);
 
             Ok(())
@@ -227,9 +224,9 @@ mod tests {
         assert!(bandit.update_batch(&batch).is_ok());
 
         assert_eq!(bandit.arms.get(&arm_1).map(|arm| arm.pulls), Some(1));
-        assert_eq!(bandit.arms.get(&arm_1).map(|arm| arm.rewards), Some(1.0));
+        assert_eq!(bandit.arms.get(&arm_1).map(|arm| arm.value), Some(1.0));
         assert_eq!(bandit.arms.get(&arm_2).map(|arm| arm.pulls), Some(2));
-        assert_eq!(bandit.arms.get(&arm_2).map(|arm| arm.rewards), Some(0.0));
+        assert_eq!(bandit.arms.get(&arm_2).map(|arm| arm.value), Some(0.0));
     }
 
     #[test]
