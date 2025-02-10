@@ -1,8 +1,6 @@
-use super::responses::ApiResponse;
-
 use crate::actors::errors::SupervisorOrBanditError;
 
-use actix_web::{error::ResponseError, http::header::ContentType, http::StatusCode, HttpResponse};
+use actix_web::{error::ResponseError, http::StatusCode};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -16,13 +14,6 @@ pub enum ApiResponseError {
 }
 
 impl ResponseError for ApiResponseError {
-    fn error_response(&self) -> HttpResponse {
-        let response = ApiResponse::with_data(Some(self.to_string()));
-        HttpResponse::build(self.status_code())
-            .insert_header(ContentType::json())
-            .json(response)
-    }
-
     fn status_code(&self) -> StatusCode {
         match self {
             ApiResponseError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,

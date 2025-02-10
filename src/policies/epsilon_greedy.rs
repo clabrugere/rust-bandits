@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedyArm {
     value: f64,
     pulls: u64,
@@ -62,7 +62,7 @@ impl Arm for EpsilonGreedyArm {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedy {
     arms: HashMap<usize, EpsilonGreedyArm>,
     epsilon: f64,

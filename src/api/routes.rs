@@ -1,8 +1,6 @@
 use super::errors::ApiResponseError;
 use super::requests::{UpdateBatchPayload, UpdatePayload};
-use super::responses::{
-    AddArmResponse, ApiResponse, CreateResponse, DrawResponse, ListBanditsResponse,
-};
+use super::responses::{AddArmResponse, CreateResponse, DrawResponse, ListBanditsResponse};
 
 use crate::actors::supervisor::{
     AddArmBandit, Clear, CreateBandit, DeleteArmBandit, DeleteBandit, DrawBandit, GetBanditStats,
@@ -14,32 +12,35 @@ use actix::prelude::*;
 use actix_web::{
     get, post,
     web::{Data, Json, Path},
-    Responder, Result,
+    HttpResponse, Responder, Result,
 };
 use uuid::Uuid;
 
+#[get("ping")]
+async fn ping() -> Result<impl Responder> {
+    Ok(HttpResponse::Ok().finish())
+}
+
 #[get("list")]
 async fn list(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
-    let bandit_ids = supervisor
+    let response = supervisor
         .send(ListBandits)
         .await
+        .map(|bandit_ids| Json(ListBanditsResponse { bandit_ids }))
         .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::with_data(Some(ListBanditsResponse { bandit_ids }));
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("clear")]
 async fn clear(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
-    supervisor
+    let response = supervisor
         .send(Clear)
         .await
+        .map(|_| HttpResponse::Ok())
         .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::<()>::default();
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("create")]
@@ -47,17 +48,17 @@ async fn create(
     supervisor: Data<Addr<Supervisor>>,
     policy_type: Json<PolicyType>,
 ) -> Result<impl Responder> {
-    let bandit_id = supervisor
+    let policy_type = policy_type.into_inner();
+    let response = supervisor
         .send(CreateBandit {
             bandit_id: None,
-            policy_type: policy_type.into_inner(),
+            policy_type,
         })
         .await
+        .map(|bandit_id| Json(CreateResponse { bandit_id }))
         .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::with_data(Some(CreateResponse { bandit_id }));
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("{bandit_id}/reset")]
@@ -67,15 +68,13 @@ async fn reset(
 ) -> Result<impl Responder> {
     let bandit_id =
         Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    supervisor
+    let response = supervisor
         .send(ResetBandit { bandit_id })
         .await
-        .map_err(|_| ApiResponseError::InternalError)?
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map(|_| HttpResponse::Ok())
+        .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::<()>::default();
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("{bandit_id}/delete")]
@@ -85,15 +84,13 @@ async fn delete(
 ) -> Result<impl Responder> {
     let bandit_id =
         Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    supervisor
+    let response = supervisor
         .send(DeleteBandit { bandit_id })
         .await
-        .map_err(|_| ApiResponseError::InternalError)?
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map(|_| HttpResponse::Ok())
+        .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::<()>::default();
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("{bandit_id}/add_arm")]
@@ -103,15 +100,14 @@ async fn add_arm(
 ) -> Result<impl Responder> {
     let bandit_id =
         Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let arm_id = supervisor
+    let response = supervisor
         .send(AddArmBandit { bandit_id })
         .await
         .map_err(|_| ApiResponseError::InternalError)?
+        .map(|arm_id| Json(AddArmResponse { arm_id }))
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
-    let response = ApiResponse::with_data(Some(AddArmResponse { arm_id }));
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("{bandit_id}/delete_arm/{arm_id}")]
@@ -123,15 +119,13 @@ async fn delete_arm(
     let bandit_id =
         Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let arm_id = arm_id.into_inner();
-    supervisor
+    let response = supervisor
         .send(DeleteArmBandit { bandit_id, arm_id })
         .await
-        .map_err(|_| ApiResponseError::InternalError)?
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map(|_| HttpResponse::Ok())
+        .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::<()>::default();
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[get("{bandit_id}/draw")]
@@ -141,15 +135,14 @@ async fn draw(
 ) -> Result<impl Responder> {
     let bandit_id =
         Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let arm_id = supervisor
+    let response = supervisor
         .send(DrawBandit { bandit_id })
         .await
         .map_err(|_| ApiResponseError::InternalError)?
+        .map(|arm_id| Json(DrawResponse { arm_id }))
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
-    let response = ApiResponse::with_data(Some(DrawResponse { arm_id }));
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("{bandit_id}/update")]
@@ -158,21 +151,20 @@ async fn update(
     bandit_id: Path<String>,
     payload: Json<UpdatePayload>,
 ) -> Result<impl Responder> {
-    let bandit_id = Uuid::try_parse(&bandit_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let bandit_id =
+        Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let UpdatePayload { arm_id, reward, .. } = payload.into_inner();
-    supervisor
+    let response = supervisor
         .send(UpdateBandit {
             bandit_id,
             arm_id,
             reward,
         })
         .await
-        .map_err(|_| ApiResponseError::InternalError)?
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map(|_| HttpResponse::Ok())
+        .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::<()>::default();
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[post("{bandit_id}/update_batch")]
@@ -181,21 +173,19 @@ async fn update_batch(
     bandit_id: Path<String>,
     payload: Json<UpdateBatchPayload>,
 ) -> Result<impl Responder> {
-    let bandit_id = Uuid::try_parse(&bandit_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let bandit_id =
+        Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let UpdateBatchPayload { updates } = payload.into_inner();
-
-    supervisor
+    let response = supervisor
         .send(UpdateBatchBandit {
             bandit_id,
             updates: updates.iter().map(|u| (u.ts, u.arm_id, u.reward)).collect(),
         })
         .await
-        .map_err(|_| ApiResponseError::InternalError)?
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map(|_| HttpResponse::Ok())
+        .map_err(|_| ApiResponseError::InternalError)?;
 
-    let response = ApiResponse::<()>::default();
-
-    Ok(Json(response))
+    Ok(response)
 }
 
 #[get("{bandit_id}/stats")]
@@ -205,13 +195,12 @@ async fn stats(
 ) -> Result<impl Responder> {
     let bandit_id =
         Uuid::try_parse(&bandit_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let stats = supervisor
+    let response = supervisor
         .send(GetBanditStats { bandit_id })
         .await
         .map_err(|_| ApiResponseError::InternalError)?
+        .map(Json)
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
-    let response = ApiResponse::with_data(Some(stats));
-
-    Ok(Json(response))
+    Ok(response)
 }

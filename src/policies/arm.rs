@@ -5,7 +5,7 @@ pub trait Arm: Default + Eq + PartialEq + Ord + PartialOrd {
     fn stats(&self) -> ArmStats;
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct ArmStats {
     pub pulls: u64,
     pub mean_reward: f64,

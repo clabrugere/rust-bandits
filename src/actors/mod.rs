@@ -1,3 +1,4 @@
+pub mod accountant;
 pub mod bandit;
 pub mod errors;
 pub mod policy_cache;

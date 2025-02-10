@@ -5,7 +5,7 @@ use super::errors::PolicyError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct PolicyStats {
     pub arms: HashMap<usize, ArmStats>,
 }

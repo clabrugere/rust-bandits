@@ -1364,6 +1364,7 @@ name = "rust-bandits"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix-http",
  "actix-web",
  "config",
  "env_logger",

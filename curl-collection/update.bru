@@ -1,18 +1,19 @@
 meta {
   name: update
   type: http
-  seq: 5
+  seq: 6
 }
 
 post {
-  url: http://127.0.0.1:8080/bandit/f522d73f-2aae-41f8-869a-13cf7c1d959d/update
+  url: http://127.0.0.1:8080/bandits/b3d09c39-8316-41fd-a79c-405dc47e20af/update
   body: json
   auth: none
 }
 
 body:json {
   {
+    "ts": 0,
     "arm_id": 1,
-    "reward": 1.0
+    "reward": 0.0
   }
 }

@@ -9,6 +9,9 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AccountantConfig {}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct PolicyCacheConfig {
     pub path: PathBuf,
@@ -28,6 +31,7 @@ pub struct BanditConfig {
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
     pub server: ServerConfig,
+    pub accountant: AccountantConfig,
     pub cache: PolicyCacheConfig,
     pub supervisor: SupervisorConfig,
     pub bandit: BanditConfig,
