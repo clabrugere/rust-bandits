@@ -35,19 +35,21 @@ async fn main() -> Result<(), Error> {
             .wrap(Logger::default())
             .service(ping)
             .service(
-                scope("/bandits")
-                    .wrap(from_fn(log_response))
-                    .service(list)
-                    .service(clear)
-                    .service(create)
-                    .service(reset)
-                    .service(delete)
-                    .service(add_arm)
-                    .service(delete_arm)
-                    .service(draw)
-                    .service(update)
-                    .service(update_batch)
-                    .service(stats),
+                scope("/v1").service(
+                    scope("/experiments")
+                        .wrap(from_fn(log_response))
+                        .service(list)
+                        .service(clear)
+                        .service(create)
+                        .service(reset)
+                        .service(delete)
+                        .service(add_arm)
+                        .service(delete_arm)
+                        .service(draw)
+                        .service(update)
+                        .service(update_batch)
+                        .service(stats),
+                ),
             )
     })
     .bind((config.server.host, config.server.port))?
