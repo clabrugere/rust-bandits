@@ -13,7 +13,7 @@ pub struct ServerConfig {
 pub struct AccountantConfig {}
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct PolicyCacheConfig {
+pub struct ExperimentCacheConfig {
     pub path: PathBuf,
     pub persist_every: u64,
 }
@@ -32,7 +32,7 @@ pub struct ExperimentConfig {
 pub struct AppConfig {
     pub server: ServerConfig,
     pub accountant: AccountantConfig,
-    pub cache: PolicyCacheConfig,
+    pub experiment_cache: ExperimentCacheConfig,
     pub supervisor: SupervisorConfig,
     pub experiment: ExperimentConfig,
 }

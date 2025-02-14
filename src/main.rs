@@ -9,7 +9,7 @@ use actix_web::{
     web::{scope, Data},
     App, HttpServer,
 };
-use actors::{accountant::Accountant, policy_cache::PolicyCache, supervisor::Supervisor};
+use actors::{accountant::Accountant, experiment_cache::ExperimentCache, supervisor::Supervisor};
 use api::responses::log_response;
 use api::routes::{
     add_arm, clear, create, delete, delete_arm, draw, list, ping, reset, stats, update,
@@ -24,7 +24,7 @@ async fn main() -> Result<(), Error> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or(config.server.log_level));
 
     let accountant = Accountant::new(config.accountant).start();
-    let policy_cache = PolicyCache::new(config.cache).start();
+    let policy_cache = ExperimentCache::new(config.experiment_cache).start();
     let supervisor =
         Supervisor::new(config.supervisor, config.experiment, policy_cache.clone()).start();
 

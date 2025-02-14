@@ -17,7 +17,7 @@ impl Actor for Accountant {
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        info!("Starting accountant");
+        info!("Starting accountant actor");
     }
 }
 

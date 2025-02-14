@@ -1,4 +1,4 @@
-use crate::{config::PolicyCacheConfig, policies::Policy};
+use crate::{config::ExperimentCacheConfig, policies::Policy};
 
 use actix::prelude::*;
 use log::{info, warn};
@@ -10,13 +10,13 @@ use std::{
 };
 use uuid::Uuid;
 
-pub struct PolicyCache {
+pub struct ExperimentCache {
     storage: HashMap<Uuid, Box<dyn Policy + Send>>,
-    config: PolicyCacheConfig,
+    config: ExperimentCacheConfig,
 }
 
-impl PolicyCache {
-    pub fn new(config: PolicyCacheConfig) -> Self {
+impl ExperimentCache {
+    pub fn new(config: ExperimentCacheConfig) -> Self {
         let storage = File::open(&config.path)
             .map(|file| {
                 let reader = BufReader::new(file);
@@ -45,11 +45,11 @@ impl PolicyCache {
     }
 }
 
-impl Actor for PolicyCache {
+impl Actor for ExperimentCache {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Starting policy cache");
+        info!("Starting experiment cache actor");
         let persist_every = Duration::from_secs(self.config.persist_every);
         ctx.run_interval(persist_every, |cache, _| {
             cache.persist();
@@ -59,55 +59,55 @@ impl Actor for PolicyCache {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct InsertPolicyCache {
+pub struct InsertExperimentCache {
     pub experiment_id: Uuid,
     pub policy: Box<dyn Policy + Send>,
 }
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct RemovePolicyCache {
+pub struct RemoveExperimentCache {
     pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "Option<Box<dyn Policy + Send>>")]
-pub struct ReadPolicyCache {
+pub struct ReadExperimentCache {
     pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "HashMap<Uuid, Box<dyn Policy + Send>>")]
-pub struct ReadFullPolicyCache;
+pub struct ReadFullExperimentCache;
 
-impl Handler<InsertPolicyCache> for PolicyCache {
+impl Handler<InsertExperimentCache> for ExperimentCache {
     type Result = ();
 
-    fn handle(&mut self, msg: InsertPolicyCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: InsertExperimentCache, _: &mut Self::Context) -> Self::Result {
         self.storage.insert(msg.experiment_id, msg.policy);
     }
 }
 
-impl Handler<RemovePolicyCache> for PolicyCache {
+impl Handler<RemoveExperimentCache> for ExperimentCache {
     type Result = ();
 
-    fn handle(&mut self, msg: RemovePolicyCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RemoveExperimentCache, _: &mut Self::Context) -> Self::Result {
         self.storage.remove(&msg.experiment_id);
     }
 }
 
-impl Handler<ReadPolicyCache> for PolicyCache {
+impl Handler<ReadExperimentCache> for ExperimentCache {
     type Result = Option<Box<dyn Policy + Send>>;
 
-    fn handle(&mut self, msg: ReadPolicyCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ReadExperimentCache, _: &mut Self::Context) -> Self::Result {
         self.storage.get(&msg.experiment_id).cloned()
     }
 }
 
-impl Handler<ReadFullPolicyCache> for PolicyCache {
-    type Result = MessageResult<ReadFullPolicyCache>;
+impl Handler<ReadFullExperimentCache> for ExperimentCache {
+    type Result = MessageResult<ReadFullExperimentCache>;
 
-    fn handle(&mut self, _: ReadFullPolicyCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: ReadFullExperimentCache, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.storage.clone())
     }
 }

@@ -2,9 +2,9 @@ use super::errors::{SupervisorError, SupervisorOrExperimentError};
 use super::experiment::{
     AddArm, DeleteArm, Draw, Experiment, GetStats, Ping, Pong, Reset, Update, UpdateBatch,
 };
-use super::policy_cache::{PolicyCache, ReadFullPolicyCache, RemovePolicyCache};
+use super::experiment_cache::{ExperimentCache, ReadFullExperimentCache, RemoveExperimentCache};
 
-use crate::actors::policy_cache::ReadPolicyCache;
+use crate::actors::experiment_cache::ReadExperimentCache;
 use crate::config::{ExperimentConfig, SupervisorConfig};
 use crate::policies::{Policy, PolicyStats, PolicyType};
 
@@ -18,14 +18,14 @@ pub struct Supervisor {
     config: SupervisorConfig,
     experiments: HashMap<Uuid, Addr<Experiment>>,
     experiment_config: ExperimentConfig,
-    cache: Addr<PolicyCache>,
+    cache: Addr<ExperimentCache>,
 }
 
 impl Supervisor {
     pub fn new(
         config: SupervisorConfig,
         experiment_config: ExperimentConfig,
-        cache: Addr<PolicyCache>,
+        cache: Addr<ExperimentCache>,
     ) -> Self {
         Self {
             config,
@@ -37,7 +37,7 @@ impl Supervisor {
 
     fn initialize_from_storage(&self, ctx: &mut Context<Self>) {
         self.cache
-            .send(ReadFullPolicyCache)
+            .send(ReadFullExperimentCache)
             .into_actor(self)
             .then(|storage, supervisor, _| {
                 match storage {
@@ -225,7 +225,7 @@ impl Handler<DeleteExperiment> for Supervisor {
         self.delete_experiment(&msg.experiment_id)
             .map_err(SupervisorOrExperimentError::from)
             .map(|_| {
-                self.cache.do_send(RemovePolicyCache {
+                self.cache.do_send(RemoveExperimentCache {
                     experiment_id: msg.experiment_id,
                 });
             })

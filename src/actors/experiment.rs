@@ -1,5 +1,5 @@
 use super::errors::ExperimentOrPolicyError;
-use super::policy_cache::{InsertPolicyCache, PolicyCache};
+use super::experiment_cache::{ExperimentCache, InsertExperimentCache};
 
 use crate::policies::{Policy, PolicyStats};
 
@@ -11,7 +11,7 @@ use uuid::Uuid;
 pub struct Experiment {
     id: Uuid,
     policy: Box<dyn Policy + Send>,
-    cache: Addr<PolicyCache>,
+    cache: Addr<ExperimentCache>,
     cache_every: u64,
 }
 
@@ -19,7 +19,7 @@ impl Experiment {
     pub fn new(
         id: Uuid,
         policy: Box<dyn Policy + Send>,
-        cache: Addr<PolicyCache>,
+        cache: Addr<ExperimentCache>,
         cache_every: u64,
     ) -> Self {
         Self {
@@ -32,7 +32,7 @@ impl Experiment {
 
     fn cache(&self) {
         info!("Caching policy for experiment {}", &self.id);
-        self.cache.do_send(InsertPolicyCache {
+        self.cache.do_send(InsertExperimentCache {
             experiment_id: self.id,
             policy: self.policy.clone_box(),
         });

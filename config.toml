@@ -5,7 +5,7 @@ port = "8080"
 
 [accountant]
 
-[cache]
+[experiment_cache]
 path = "./cache"
 persist_every = "60"
 
