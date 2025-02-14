@@ -12,5 +12,5 @@ persist_every = "60"
 [supervisor]
 ping_every = "30"
 
-[bandit]
+[experiment]
 cache_every = "60"

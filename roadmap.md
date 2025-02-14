@@ -2,7 +2,7 @@
 
 - [x] BanditStats: return the mean reward instead of the cumulative reward
 - [x] log requests with uuid, timestamp, endpoint requested and hash of the payload.
-- [ ] for end-users, use "experiment" naming in place of "bandit" (for example in routes and structured responses)
+- [x] for end-users, use "experiment" naming in place of "bandit" (for example in routes and structured responses)
 - [ ] implement DB actor to log requests and responses
 - [ ] cache persist: investigate append-only to keep some history
 

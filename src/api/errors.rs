@@ -1,4 +1,4 @@
-use crate::actors::errors::SupervisorOrBanditError;
+use crate::actors::errors::SupervisorOrExperimentError;
 
 use actix_web::{error::ResponseError, http::StatusCode};
 use thiserror::Error;
@@ -8,7 +8,7 @@ pub enum ApiResponseError {
     #[error("Server Internal Error")]
     InternalError,
     #[error(transparent)]
-    ErrorBadRequest(#[from] SupervisorOrBanditError),
+    ErrorBadRequest(#[from] SupervisorOrExperimentError),
     #[error(transparent)]
     ErrorBadUuid(#[from] uuid::Error),
 }

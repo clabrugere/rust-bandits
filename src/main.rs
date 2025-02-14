@@ -26,7 +26,7 @@ async fn main() -> Result<(), Error> {
     let accountant = Accountant::new(config.accountant).start();
     let policy_cache = PolicyCache::new(config.cache).start();
     let supervisor =
-        Supervisor::new(config.supervisor, config.bandit, policy_cache.clone()).start();
+        Supervisor::new(config.supervisor, config.experiment, policy_cache.clone()).start();
 
     HttpServer::new(move || {
         App::new()

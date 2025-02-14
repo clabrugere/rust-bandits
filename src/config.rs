@@ -24,7 +24,7 @@ pub struct SupervisorConfig {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct BanditConfig {
+pub struct ExperimentConfig {
     pub cache_every: u64,
 }
 
@@ -34,7 +34,7 @@ pub struct AppConfig {
     pub accountant: AccountantConfig,
     pub cache: PolicyCacheConfig,
     pub supervisor: SupervisorConfig,
-    pub bandit: BanditConfig,
+    pub experiment: ExperimentConfig,
 }
 
 impl AppConfig {

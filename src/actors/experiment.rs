@@ -1,4 +1,4 @@
-use super::errors::BanditOrPolicyError;
+use super::errors::ExperimentOrPolicyError;
 use super::policy_cache::{InsertPolicyCache, PolicyCache};
 
 use crate::policies::{Policy, PolicyStats};
@@ -8,14 +8,14 @@ use log::info;
 use std::time::Duration;
 use uuid::Uuid;
 
-pub struct Bandit {
+pub struct Experiment {
     id: Uuid,
     policy: Box<dyn Policy + Send>,
     cache: Addr<PolicyCache>,
     cache_every: u64,
 }
 
-impl Bandit {
+impl Experiment {
     pub fn new(
         id: Uuid,
         policy: Box<dyn Policy + Send>,
@@ -31,21 +31,21 @@ impl Bandit {
     }
 
     fn cache(&self) {
-        info!("Caching bandit {}", &self.id);
+        info!("Caching policy for experiment {}", &self.id);
         self.cache.do_send(InsertPolicyCache {
-            bandit_id: self.id,
+            experiment_id: self.id,
             policy: self.policy.clone_box(),
         });
     }
 }
 
-impl Actor for Bandit {
+impl Actor for Experiment {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Starting bandit {}", self.id);
-        ctx.run_interval(Duration::from_secs(self.cache_every), |bandit, _| {
-            bandit.cache();
+        info!("Starting actor for experiment {}", self.id);
+        ctx.run_interval(Duration::from_secs(self.cache_every), |experiment, _| {
+            experiment.cache();
         });
     }
 }
@@ -66,24 +66,24 @@ pub struct Reset;
 pub struct AddArm;
 
 #[derive(Message)]
-#[rtype(result = "Result<(), BanditOrPolicyError>")]
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct DeleteArm {
     pub arm_id: usize,
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<usize, BanditOrPolicyError>")]
+#[rtype(result = "Result<usize, ExperimentOrPolicyError>")]
 pub struct Draw;
 
 #[derive(Message)]
-#[rtype(result = "Result<(), BanditOrPolicyError>")]
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct Update {
     pub arm_id: usize,
     pub reward: f64,
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<(), BanditOrPolicyError>")]
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct UpdateBatch {
     pub updates: Vec<(u64, usize, f64)>,
 }
@@ -92,7 +92,7 @@ pub struct UpdateBatch {
 #[rtype(result = "PolicyStats")]
 pub struct GetStats;
 
-impl Handler<Ping> for Bandit {
+impl Handler<Ping> for Experiment {
     type Result = Pong;
 
     fn handle(&mut self, _: Ping, _: &mut Self::Context) -> Self::Result {
@@ -100,7 +100,7 @@ impl Handler<Ping> for Bandit {
     }
 }
 
-impl Handler<Reset> for Bandit {
+impl Handler<Reset> for Experiment {
     type Result = ();
 
     fn handle(&mut self, _: Reset, _: &mut Self::Context) -> Self::Result {
@@ -108,7 +108,7 @@ impl Handler<Reset> for Bandit {
     }
 }
 
-impl Handler<AddArm> for Bandit {
+impl Handler<AddArm> for Experiment {
     type Result = usize;
 
     fn handle(&mut self, _: AddArm, _: &mut Self::Context) -> Self::Result {
@@ -116,45 +116,45 @@ impl Handler<AddArm> for Bandit {
     }
 }
 
-impl Handler<DeleteArm> for Bandit {
-    type Result = Result<(), BanditOrPolicyError>;
+impl Handler<DeleteArm> for Experiment {
+    type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: DeleteArm, _: &mut Self::Context) -> Self::Result {
         self.policy
             .delete_arm(msg.arm_id)
-            .map_err(BanditOrPolicyError::from)
+            .map_err(ExperimentOrPolicyError::from)
     }
 }
 
-impl Handler<Draw> for Bandit {
-    type Result = Result<usize, BanditOrPolicyError>;
+impl Handler<Draw> for Experiment {
+    type Result = Result<usize, ExperimentOrPolicyError>;
 
     fn handle(&mut self, _: Draw, _: &mut Self::Context) -> Self::Result {
-        self.policy.draw().map_err(BanditOrPolicyError::from)
+        self.policy.draw().map_err(ExperimentOrPolicyError::from)
     }
 }
 
-impl Handler<Update> for Bandit {
-    type Result = Result<(), BanditOrPolicyError>;
+impl Handler<Update> for Experiment {
+    type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: Update, _: &mut Self::Context) -> Self::Result {
         self.policy
             .update(msg.arm_id, msg.reward)
-            .map_err(BanditOrPolicyError::from)
+            .map_err(ExperimentOrPolicyError::from)
     }
 }
 
-impl Handler<UpdateBatch> for Bandit {
-    type Result = Result<(), BanditOrPolicyError>;
+impl Handler<UpdateBatch> for Experiment {
+    type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: UpdateBatch, _: &mut Self::Context) -> Self::Result {
         self.policy
             .update_batch(&msg.updates)
-            .map_err(BanditOrPolicyError::from)
+            .map_err(ExperimentOrPolicyError::from)
     }
 }
 
-impl Handler<GetStats> for Bandit {
+impl Handler<GetStats> for Experiment {
     type Result = MessageResult<GetStats>;
 
     fn handle(&mut self, _: GetStats, _: &mut Self::Context) -> Self::Result {

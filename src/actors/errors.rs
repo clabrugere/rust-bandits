@@ -5,27 +5,27 @@ use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum SupervisorError {
-    #[error("Bandit {0} not available")]
-    BanditNotAvailable(Uuid),
-    #[error("Bandit {0} not found")]
-    BanditNotFound(Uuid),
+    #[error("Experiment {0} not available")]
+    ExperimentNotAvailable(Uuid),
+    #[error("Experiment {0} not found")]
+    ExperimentNotFound(Uuid),
 }
 
 #[derive(Debug, Error)]
-pub enum SupervisorOrBanditError {
+pub enum SupervisorOrExperimentError {
     #[error(transparent)]
     Supervisor(#[from] SupervisorError),
     #[error(transparent)]
-    Bandit(#[from] BanditOrPolicyError),
+    Experiment(#[from] ExperimentOrPolicyError),
 }
 
 #[derive(Debug, Error)]
-pub enum BanditError {}
+pub enum ExperimentError {}
 
 #[derive(Debug, Error)]
-pub enum BanditOrPolicyError {
+pub enum ExperimentOrPolicyError {
     #[error(transparent)]
-    Bandit(#[from] BanditError),
+    Experiment(#[from] ExperimentError),
     #[error(transparent)]
     PolicyError(#[from] PolicyError),
 }

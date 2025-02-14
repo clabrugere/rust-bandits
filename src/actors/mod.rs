@@ -1,5 +1,5 @@
 pub mod accountant;
-pub mod bandit;
 pub mod errors;
+pub mod experiment;
 pub mod policy_cache;
 pub mod supervisor;

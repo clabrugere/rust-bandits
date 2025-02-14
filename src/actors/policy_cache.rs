@@ -60,20 +60,20 @@ impl Actor for PolicyCache {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct InsertPolicyCache {
-    pub bandit_id: Uuid,
+    pub experiment_id: Uuid,
     pub policy: Box<dyn Policy + Send>,
 }
 
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct RemovePolicyCache {
-    pub bandit_id: Uuid,
+    pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "Option<Box<dyn Policy + Send>>")]
 pub struct ReadPolicyCache {
-    pub bandit_id: Uuid,
+    pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
@@ -84,7 +84,7 @@ impl Handler<InsertPolicyCache> for PolicyCache {
     type Result = ();
 
     fn handle(&mut self, msg: InsertPolicyCache, _: &mut Self::Context) -> Self::Result {
-        self.storage.insert(msg.bandit_id, msg.policy);
+        self.storage.insert(msg.experiment_id, msg.policy);
     }
 }
 
@@ -92,7 +92,7 @@ impl Handler<RemovePolicyCache> for PolicyCache {
     type Result = ();
 
     fn handle(&mut self, msg: RemovePolicyCache, _: &mut Self::Context) -> Self::Result {
-        self.storage.remove(&msg.bandit_id);
+        self.storage.remove(&msg.experiment_id);
     }
 }
 
@@ -100,7 +100,7 @@ impl Handler<ReadPolicyCache> for PolicyCache {
     type Result = Option<Box<dyn Policy + Send>>;
 
     fn handle(&mut self, msg: ReadPolicyCache, _: &mut Self::Context) -> Self::Result {
-        self.storage.get(&msg.bandit_id).cloned()
+        self.storage.get(&msg.experiment_id).cloned()
     }
 }
 

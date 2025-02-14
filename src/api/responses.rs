@@ -100,17 +100,17 @@ impl LoggedResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct ListBanditsResponse {
-    pub bandit_ids: Vec<Uuid>,
+pub struct ListExperimentsResponse {
+    pub experiment_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct CreateResponse {
-    pub bandit_id: Uuid,
+pub struct CreateExperimentResponse {
+    pub experiment_id: Uuid,
 }
 
 #[derive(Debug, Serialize)]
-pub struct AddArmResponse {
+pub struct AddExperimentArmResponse {
     pub arm_id: usize,
 }
 

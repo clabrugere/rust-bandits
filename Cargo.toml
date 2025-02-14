@@ -1,6 +1,7 @@
 [package]
 name = "rust-bandits"
 version = "0.1.0"
+authors = ["Clément Labrugere"]
 edition = "2021"
 
 [profile.dev]
