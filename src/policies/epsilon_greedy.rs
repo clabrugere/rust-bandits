@@ -53,6 +53,11 @@ impl Arm for EpsilonGreedyArm {
         self.pulls = 0;
     }
 
+    fn update(&mut self, reward: f64) {
+        self.pulls += 1;
+        self.value += (reward - self.value) / (self.pulls as f64);
+    }
+
     fn stats(&self) -> ArmStats {
         ArmStats {
             pulls: self.pulls,
@@ -126,9 +131,7 @@ impl Policy for EpsilonGreedy {
 
     fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
         if let Some(arm) = self.arms.get_mut(&arm_id) {
-            arm.pulls += 1;
-            arm.value += (reward - arm.value) / (arm.pulls as f64);
-
+            arm.update(reward);
             Ok(())
         } else {
             Err(PolicyError::ArmNotFound(arm_id))
@@ -158,7 +161,6 @@ impl Policy for EpsilonGreedy {
 mod tests {
     use super::*;
     use rand::{rngs::SmallRng, Rng, SeedableRng};
-    use std::collections::HashMap;
 
     const SEED: u64 = 1234;
 
@@ -232,27 +234,48 @@ mod tests {
     #[test]
     fn debug() {
         let mut rng = SmallRng::seed_from_u64(SEED);
-        let mut bandit = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut bandit = EpsilonGreedy::new(0.2, Some(SEED));
 
-        println!("{:?}", bandit.draw());
-
-        let mut arms: HashMap<_, _> = (0..4)
-            .map(|_| (bandit.add_arm(), rng.gen::<f64>()))
-            .collect();
-
-        println!("arms: {:?}", arms);
+        let mut true_values = vec![0.05, 0.2, 0.5];
+        let mut arm_ids = true_values
+            .iter()
+            .map(|_| bandit.add_arm())
+            .collect::<Vec<usize>>();
 
         for i in 0..1000 {
             let arm_id = bandit.draw().unwrap();
-            let reward = (rng.gen::<f64>() < *arms.get(&arm_id).unwrap()) as i32 as f64;
+            let reward = (rng.gen::<f64>() < true_values[arm_id]) as i32 as f64;
             let _ = bandit.update(arm_id, reward);
 
             if i == 250 {
-                arms.insert(bandit.add_arm(), 0.8);
+                true_values.push(0.8);
+                arm_ids.push(bandit.add_arm());
             }
         }
 
-        println!("arms: {:?}", arms);
-        println!("{:?}", bandit.stats());
+        let stats = bandit.stats();
+        let mut rewards = stats
+            .arms
+            .iter()
+            .map(|(arm_id, arm_stats)| (arm_id, arm_stats.mean_reward))
+            .collect::<Vec<(&usize, f64)>>();
+        rewards.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
+
+        println!(
+            "arms: {:?}",
+            arm_ids
+                .iter()
+                .zip(&true_values)
+                .collect::<Vec<(&usize, &f64)>>()
+        );
+        println!("{rewards:?}");
+
+        assert_eq!(
+            rewards
+                .iter()
+                .map(|(&arm_id, _)| arm_id)
+                .collect::<Vec<usize>>(),
+            arm_ids
+        );
     }
 }
