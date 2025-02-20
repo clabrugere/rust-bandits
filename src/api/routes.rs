@@ -13,7 +13,7 @@ use crate::policies::PolicyType;
 
 use actix::prelude::*;
 use actix_web::{
-    get, post,
+    delete, get, post, put,
     web::{Data, Json, Path},
     HttpResponse, Responder, Result,
 };
@@ -35,7 +35,7 @@ async fn list(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
     Ok(response)
 }
 
-#[post("clear")]
+#[delete("clear")]
 async fn clear(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
     let response = supervisor
         .send(Clear)
@@ -64,7 +64,7 @@ async fn create(
     Ok(response)
 }
 
-#[post("{experiment_id}/reset")]
+#[put("{experiment_id}/reset")]
 async fn reset(
     supervisor: Data<Addr<Supervisor>>,
     experiment_id: Path<String>,
@@ -80,7 +80,7 @@ async fn reset(
     Ok(response)
 }
 
-#[post("{experiment_id}/delete")]
+#[delete("{experiment_id}/delete")]
 async fn delete(
     supervisor: Data<Addr<Supervisor>>,
     experiment_id: Path<String>,
@@ -113,7 +113,7 @@ async fn add_arm(
     Ok(response)
 }
 
-#[post("{experiment_id}/delete_arm/{arm_id}")]
+#[delete("{experiment_id}/delete_arm/{arm_id}")]
 async fn delete_arm(
     supervisor: Data<Addr<Supervisor>>,
     experiment_id: Path<String>,
@@ -151,7 +151,7 @@ async fn draw(
     Ok(response)
 }
 
-#[post("{experiment_id}/update")]
+#[put("{experiment_id}/update")]
 async fn update(
     supervisor: Data<Addr<Supervisor>>,
     experiment_id: Path<String>,
@@ -173,7 +173,7 @@ async fn update(
     Ok(response)
 }
 
-#[post("{experiment_id}/update_batch")]
+#[put("{experiment_id}/update_batch")]
 async fn update_batch(
     supervisor: Data<Addr<Supervisor>>,
     experiment_id: Path<String>,
