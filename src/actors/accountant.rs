@@ -33,5 +33,6 @@ impl Handler<LogResponse> for Accountant {
     fn handle(&mut self, msg: LogResponse, _: &mut Self::Context) -> Self::Result {
         let serialized = serde_json::to_string(&msg.response).unwrap_or_default();
         info!("Logged response:\n{serialized}");
+        //TODO: Implement request logging
     }
 }
