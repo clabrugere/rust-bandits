@@ -41,8 +41,8 @@ impl Supervisor {
             .into_actor(self)
             .then(|storage, supervisor, _| {
                 match storage {
-                    Ok(policy_states) => {
-                        policy_states.iter().for_each(|(&experiment_id, policy)| {
+                    Ok(experiments) => {
+                        experiments.iter().for_each(|(&experiment_id, policy)| {
                             supervisor.create_experiment(Some(experiment_id), policy.clone_box());
                         });
                     }
@@ -71,12 +71,12 @@ impl Supervisor {
         experiment_id
     }
 
-    pub fn delete_experiment(&mut self, experiment_id: &Uuid) -> Result<(), SupervisorError> {
-        if self.experiments.contains_key(experiment_id) {
-            self.experiments.remove(experiment_id);
+    pub fn delete_experiment(&mut self, experiment_id: Uuid) -> Result<(), SupervisorError> {
+        if self.experiments.contains_key(&experiment_id) {
+            self.experiments.remove(&experiment_id);
             Ok(())
         } else {
-            Err(SupervisorError::ExperimentNotFound(*experiment_id))
+            Err(SupervisorError::ExperimentNotFound(experiment_id))
         }
     }
 }
@@ -222,7 +222,7 @@ impl Handler<DeleteExperiment> for Supervisor {
     type Result = Result<(), SupervisorOrExperimentError>;
 
     fn handle(&mut self, msg: DeleteExperiment, _: &mut Self::Context) -> Self::Result {
-        self.delete_experiment(&msg.experiment_id)
+        self.delete_experiment(msg.experiment_id)
             .map_err(SupervisorOrExperimentError::from)
             .map(|_| {
                 self.cache.do_send(RemoveExperimentCache {
