@@ -93,6 +93,7 @@ impl Actor for Supervisor {
     }
 }
 
+// Messages
 #[derive(Message)]
 #[rtype(result = "()")]
 struct PingExperiments;
@@ -128,6 +129,8 @@ pub struct ResetExperiment {
 #[rtype(result = "Result<usize, SupervisorOrExperimentError>")]
 pub struct AddExperimentArm {
     pub experiment_id: Uuid,
+    pub initial_reward: Option<f64>,
+    pub initial_count: Option<u64>,
 }
 
 #[derive(Message)]
@@ -258,7 +261,10 @@ impl Handler<AddExperimentArm> for Supervisor {
         if let Some(actor) = self.experiments.get(&msg.experiment_id).cloned() {
             Box::pin(async move {
                 actor
-                    .send(AddArm)
+                    .send(AddArm {
+                        initial_reward: msg.initial_reward,
+                        initial_count: msg.initial_count,
+                    })
                     .await
                     .map_err(|_| SupervisorError::ExperimentNotAvailable(msg.experiment_id).into())
             })

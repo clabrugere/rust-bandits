@@ -50,6 +50,7 @@ impl Actor for Experiment {
     }
 }
 
+// Messages
 #[derive(Message)]
 #[rtype(result = "Pong")]
 pub struct Ping;
@@ -63,7 +64,10 @@ pub struct Reset;
 
 #[derive(Message)]
 #[rtype(result = "usize")]
-pub struct AddArm;
+pub struct AddArm {
+    pub initial_reward: Option<f64>,
+    pub initial_count: Option<u64>,
+}
 
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
@@ -111,8 +115,8 @@ impl Handler<Reset> for Experiment {
 impl Handler<AddArm> for Experiment {
     type Result = usize;
 
-    fn handle(&mut self, _: AddArm, _: &mut Self::Context) -> Self::Result {
-        self.policy.add_arm()
+    fn handle(&mut self, msg: AddArm, _: &mut Self::Context) -> Self::Result {
+        self.policy.add_arm(msg.initial_reward, msg.initial_count)
     }
 }
 

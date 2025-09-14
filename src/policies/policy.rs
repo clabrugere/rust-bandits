@@ -38,7 +38,7 @@ pub trait CloneBoxedPolicy {
 #[typetag::serde(tag = "type")]
 pub trait Policy: Send + CloneBoxedPolicy {
     fn reset(&mut self);
-    fn add_arm(&mut self) -> usize;
+    fn add_arm(&mut self, initial_reward: Option<f64>, initial_count: Option<u64>) -> usize;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
     fn draw(&mut self) -> Result<usize, PolicyError>;
     fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError>;

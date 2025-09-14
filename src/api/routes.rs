@@ -1,5 +1,5 @@
 use super::errors::ApiResponseError;
-use super::requests::{UpdateBatchPayload, UpdatePayload};
+use super::requests::{AddArmPayload, UpdateBatchPayload, UpdatePayload};
 use super::responses::{
     AddExperimentArmResponse, CreateExperimentResponse, DrawResponse, ListExperimentsResponse,
 };
@@ -100,11 +100,20 @@ async fn delete(
 async fn add_arm(
     supervisor: Data<Addr<Supervisor>>,
     experiment_id: Path<String>,
+    initial_state: Json<AddArmPayload>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let AddArmPayload {
+        initial_reward,
+        initial_count,
+    } = initial_state.into_inner();
     let response = supervisor
-        .send(AddExperimentArm { experiment_id })
+        .send(AddExperimentArm {
+            experiment_id,
+            initial_reward,
+            initial_count,
+        })
         .await
         .map_err(|_| ApiResponseError::InternalError)?
         .map(|arm_id| Json(AddExperimentArmResponse { arm_id }))

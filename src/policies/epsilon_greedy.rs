@@ -96,9 +96,20 @@ impl Policy for EpsilonGreedy {
         self.arms.values_mut().for_each(|arm| arm.reset());
     }
 
-    fn add_arm(&mut self) -> usize {
+    fn add_arm(&mut self, initial_reward: Option<f64>, initial_count: Option<u64>) -> usize {
         let arm_id = self.arms.len();
-        self.arms.insert(arm_id, EpsilonGreedyArm::default());
+        match (initial_reward, initial_count) {
+            (Some(value), Some(pulls)) => self.arms.insert(
+                arm_id,
+                EpsilonGreedyArm {
+                    value,
+                    pulls,
+                    is_active: true,
+                },
+            ),
+            (None, _) | (_, None) => self.arms.insert(arm_id, EpsilonGreedyArm::default()),
+        };
+
         arm_id
     }
 
@@ -169,14 +180,14 @@ mod tests {
         let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
         assert!(policy.arms.len() == 0);
 
-        let arm_id = policy.add_arm();
+        let arm_id = policy.add_arm(None, None);
         assert!(policy.arms.contains_key(&arm_id))
     }
 
     #[test]
     fn delete_arm() {
         let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
-        let arm_id = policy.add_arm();
+        let arm_id = policy.add_arm(None, None);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
         assert!(policy.delete_arm(arm_id).is_err());
@@ -185,15 +196,15 @@ mod tests {
     #[test]
     fn draw() {
         let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
-        let arm_id = policy.add_arm();
+        let arm_id = policy.add_arm(None, None);
         assert_eq!(policy.draw().ok(), Some(arm_id));
     }
 
     #[test]
     fn draw_best() {
         let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm();
-        let _ = policy.add_arm();
+        let arm_1 = policy.add_arm(None, None);
+        let _ = policy.add_arm(None, None);
 
         policy.arms.get_mut(&arm_1).map(|arm| arm.value = 1.0);
         assert_eq!(policy.draw().ok(), Some(arm_1));
@@ -208,8 +219,8 @@ mod tests {
     #[test]
     fn update() {
         let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm();
-        let arm_2 = policy.add_arm();
+        let arm_1 = policy.add_arm(None, None);
+        let arm_2 = policy.add_arm(None, None);
 
         assert!(policy.update(arm_1, 1.0).is_ok());
         assert_eq!(policy.arms.get(&arm_1).map(|arm| arm.value), Some(1.0));
@@ -219,8 +230,8 @@ mod tests {
     #[test]
     fn update_batch() {
         let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm();
-        let arm_2 = policy.add_arm();
+        let arm_1 = policy.add_arm(None, None);
+        let arm_2 = policy.add_arm(None, None);
         let batch = vec![(0, arm_2, 0.0), (1, arm_1, 1.0), (2, arm_2, 0.0)];
 
         assert!(policy.update_batch(&batch).is_ok());
@@ -239,7 +250,7 @@ mod tests {
         let mut true_values = vec![0.05, 0.2, 0.5];
         let mut arm_ids = true_values
             .iter()
-            .map(|_| policy.add_arm())
+            .map(|_| policy.add_arm(None, None))
             .collect::<Vec<usize>>();
 
         for i in 0..1000 {
@@ -249,7 +260,7 @@ mod tests {
 
             if i == 250 {
                 true_values.push(0.8);
-                arm_ids.push(policy.add_arm());
+                arm_ids.push(policy.add_arm(None, None));
             }
         }
 
