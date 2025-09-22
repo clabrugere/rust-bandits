@@ -1,4 +1,5 @@
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum PolicyError {
@@ -6,4 +7,6 @@ pub enum PolicyError {
     NoArmsAvailable,
     #[error("Arm {0} not found")]
     ArmNotFound(usize),
+    #[error("Draw {0} for arm {1} not found")]
+    DrawNotFound(Uuid, usize),
 }

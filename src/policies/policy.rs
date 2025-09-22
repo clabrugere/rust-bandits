@@ -4,6 +4,16 @@ use super::errors::PolicyError;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use uuid::Uuid;
+
+#[derive(Debug)]
+pub struct DrawResult {
+    pub draw_id: Uuid,
+    pub timestamp: u128,
+    pub arm_id: usize,
+}
+
+pub type Update = (Uuid, u128, usize, f64);
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PolicyStats {
@@ -38,10 +48,16 @@ pub trait CloneBoxedPolicy {
 #[typetag::serde(tag = "type")]
 pub trait Policy: Send + CloneBoxedPolicy {
     fn reset(&mut self);
-    fn add_arm(&mut self, initial_reward: Option<f64>, initial_count: Option<u64>) -> usize;
+    fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
-    fn draw(&mut self) -> Result<usize, PolicyError>;
-    fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
-    fn update_batch(&mut self, updates: &[(u64, usize, f64)]) -> Result<(), PolicyError>;
+    fn draw(&mut self) -> Result<DrawResult, PolicyError>;
+    fn update(
+        &mut self,
+        draw_id: Uuid,
+        timestamp: u128,
+        arm_id: usize,
+        reward: f64,
+    ) -> Result<(), PolicyError>;
+    fn update_batch(&mut self, updates: &[Update]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
 }

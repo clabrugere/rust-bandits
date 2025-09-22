@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct AddArmPayload {
@@ -8,7 +9,8 @@ pub struct AddArmPayload {
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePayload {
-    pub ts: u64,
+    pub draw_id: Uuid,
+    pub timestamp: u128,
     pub arm_id: usize,
     pub reward: f64,
 }

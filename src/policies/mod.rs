@@ -4,4 +4,4 @@ pub mod errors;
 mod policy;
 mod rng;
 
-pub use policy::{Policy, PolicyStats, PolicyType};
+pub use policy::{DrawResult, Policy, PolicyStats, PolicyType};

@@ -1,7 +1,7 @@
 use super::errors::ExperimentOrPolicyError;
 use super::experiment_cache::{ExperimentCache, InsertExperimentCache};
 
-use crate::policies::{Policy, PolicyStats};
+use crate::policies::{DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
 use log::info;
@@ -76,12 +76,14 @@ pub struct DeleteArm {
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<usize, ExperimentOrPolicyError>")]
+#[rtype(result = "Result<DrawResult, ExperimentOrPolicyError>")]
 pub struct Draw;
 
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct Update {
+    pub draw_id: Uuid,
+    pub timestamp: u128,
     pub arm_id: usize,
     pub reward: f64,
 }
@@ -89,7 +91,7 @@ pub struct Update {
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct UpdateBatch {
-    pub updates: Vec<(u64, usize, f64)>,
+    pub updates: Vec<(Uuid, u128, usize, f64)>,
 }
 
 #[derive(Message)]
@@ -116,7 +118,10 @@ impl Handler<AddArm> for Experiment {
     type Result = usize;
 
     fn handle(&mut self, msg: AddArm, _: &mut Self::Context) -> Self::Result {
-        self.policy.add_arm(msg.initial_reward, msg.initial_count)
+        self.policy.add_arm(
+            msg.initial_reward.unwrap_or_default(),
+            msg.initial_count.unwrap_or_default(),
+        )
     }
 }
 
@@ -131,7 +136,7 @@ impl Handler<DeleteArm> for Experiment {
 }
 
 impl Handler<Draw> for Experiment {
-    type Result = Result<usize, ExperimentOrPolicyError>;
+    type Result = Result<DrawResult, ExperimentOrPolicyError>;
 
     fn handle(&mut self, _: Draw, _: &mut Self::Context) -> Self::Result {
         self.policy.draw().map_err(ExperimentOrPolicyError::from)
@@ -143,7 +148,7 @@ impl Handler<Update> for Experiment {
 
     fn handle(&mut self, msg: Update, _: &mut Self::Context) -> Self::Result {
         self.policy
-            .update(msg.arm_id, msg.reward)
+            .update(msg.draw_id, msg.timestamp, msg.arm_id, msg.reward)
             .map_err(ExperimentOrPolicyError::from)
     }
 }

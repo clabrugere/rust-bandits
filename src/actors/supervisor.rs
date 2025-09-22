@@ -6,7 +6,7 @@ use super::experiment_cache::{ExperimentCache, ReadFullExperimentCache, RemoveEx
 
 use crate::actors::experiment_cache::ReadExperimentCache;
 use crate::config::{ExperimentConfig, SupervisorConfig};
-use crate::policies::{Policy, PolicyStats, PolicyType};
+use crate::policies::{DrawResult, Policy, PolicyStats, PolicyType};
 
 use actix::prelude::*;
 use futures_util::future::join_all;
@@ -141,7 +141,7 @@ pub struct DeleteExperimentArm {
 }
 
 #[derive(Message)]
-#[rtype(result = "Result<usize, SupervisorOrExperimentError>")]
+#[rtype(result = "Result<DrawResult, SupervisorOrExperimentError>")]
 pub struct DrawExperiment {
     pub experiment_id: Uuid,
 }
@@ -150,6 +150,8 @@ pub struct DrawExperiment {
 #[rtype(result = "Result<(), SupervisorOrExperimentError>")]
 pub struct UpdateExperiment {
     pub experiment_id: Uuid,
+    pub draw_id: Uuid,
+    pub timestamp: u128,
     pub arm_id: usize,
     pub reward: f64,
 }
@@ -158,7 +160,7 @@ pub struct UpdateExperiment {
 #[rtype(result = "Result<(), SupervisorOrExperimentError>")]
 pub struct UpdateBatchExperiment {
     pub experiment_id: Uuid,
-    pub updates: Vec<(u64, usize, f64)>,
+    pub updates: Vec<(Uuid, u128, usize, f64)>,
 }
 
 #[derive(Message)]
@@ -301,7 +303,7 @@ impl Handler<DeleteExperimentArm> for Supervisor {
 }
 
 impl Handler<DrawExperiment> for Supervisor {
-    type Result = ResponseFuture<Result<usize, SupervisorOrExperimentError>>;
+    type Result = ResponseFuture<Result<DrawResult, SupervisorOrExperimentError>>;
 
     fn handle(&mut self, msg: DrawExperiment, _: &mut Self::Context) -> Self::Result {
         if let Some(actor) = self.experiments.get(&msg.experiment_id).cloned() {
@@ -324,6 +326,7 @@ impl Handler<DrawExperiment> for Supervisor {
     }
 }
 
+// FIX: doesn't return an error when the experiment is not found?
 impl Handler<UpdateExperiment> for Supervisor {
     type Result = ResponseFuture<Result<(), SupervisorOrExperimentError>>;
 
@@ -332,6 +335,8 @@ impl Handler<UpdateExperiment> for Supervisor {
             Box::pin(async move {
                 actor
                     .send(Update {
+                        draw_id: msg.draw_id,
+                        timestamp: msg.timestamp,
                         arm_id: msg.arm_id,
                         reward: msg.reward,
                     })

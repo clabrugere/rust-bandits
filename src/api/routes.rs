@@ -9,7 +9,7 @@ use crate::actors::supervisor::{
     DrawExperiment, GetExperimentStats, ListExperiments, ResetExperiment, Supervisor,
     UpdateBatchExperiment, UpdateExperiment,
 };
-use crate::policies::PolicyType;
+use crate::policies::{DrawResult, PolicyType};
 
 use actix::prelude::*;
 use actix_web::{
@@ -154,7 +154,19 @@ async fn draw(
         .send(DrawExperiment { experiment_id })
         .await
         .map_err(|_| ApiResponseError::InternalError)?
-        .map(|arm_id| Json(DrawResponse { arm_id }))
+        .map(
+            |DrawResult {
+                 timestamp,
+                 draw_id,
+                 arm_id,
+             }| {
+                Json(DrawResponse {
+                    timestamp,
+                    draw_id,
+                    arm_id,
+                })
+            },
+        )
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
@@ -168,10 +180,17 @@ async fn update(
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let UpdatePayload { arm_id, reward, .. } = payload.into_inner();
+    let UpdatePayload {
+        draw_id,
+        timestamp,
+        arm_id,
+        reward,
+    } = payload.into_inner();
     let response = supervisor
         .send(UpdateExperiment {
             experiment_id,
+            draw_id,
+            timestamp,
             arm_id,
             reward,
         })
@@ -194,7 +213,10 @@ async fn update_batch(
     let response = supervisor
         .send(UpdateBatchExperiment {
             experiment_id,
-            updates: updates.iter().map(|u| (u.ts, u.arm_id, u.reward)).collect(),
+            updates: updates
+                .iter()
+                .map(|u| (u.draw_id, u.timestamp, u.arm_id, u.reward))
+                .collect(),
         })
         .await
         .map(|_| HttpResponse::Ok())

@@ -76,7 +76,7 @@ pub async fn log_response(
 #[derive(Debug, Serialize)]
 pub struct LoggedResponse {
     pub id: Uuid,
-    pub ts: u128,
+    pub timestamp: u128,
     pub route: String,
     pub status: u16,
     pub request_body: String,
@@ -87,7 +87,7 @@ impl LoggedResponse {
     pub fn new(route: &str, status: u16, request_body: &str, response_body: &str) -> Self {
         Self {
             id: Uuid::new_v4(),
-            ts: SystemTime::now()
+            timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis(),
@@ -116,5 +116,7 @@ pub struct AddExperimentArmResponse {
 
 #[derive(Debug, Serialize)]
 pub struct DrawResponse {
+    pub timestamp: u128,
+    pub draw_id: Uuid,
     pub arm_id: usize,
 }
