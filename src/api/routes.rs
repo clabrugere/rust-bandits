@@ -1,17 +1,15 @@
+use std::sync::RwLock;
+
 use super::errors::ApiResponseError;
 use super::requests::{AddArmPayload, UpdateBatchPayload, UpdatePayload};
 use super::responses::{
     AddExperimentArmResponse, CreateExperimentResponse, DrawResponse, ListExperimentsResponse,
 };
+use crate::api::requests::ResetArmPayload;
+use crate::errors::RepositoryOrExperimentError;
+use crate::policies::PolicyType;
+use crate::repository::Repository;
 
-use crate::actors::supervisor::{
-    AddExperimentArm, Clear, CreateExperiment, DeleteExperiment, DeleteExperimentArm,
-    DrawExperiment, GetExperimentStats, ListExperiments, ResetExperiment, Supervisor,
-    UpdateBatchExperiment, UpdateExperiment,
-};
-use crate::policies::{DrawResult, PolicyType};
-
-use actix::prelude::*;
 use actix_web::{
     delete, get, post, put,
     web::{Data, Json, Path},
@@ -25,10 +23,11 @@ async fn ping() -> Result<impl Responder> {
 }
 
 #[get("list")]
-async fn list(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
-    let response = supervisor
-        .send(ListExperiments)
-        .await
+async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .list_experiments()
         .map(|experiment_ids| Json(ListExperimentsResponse { experiment_ids }))
         .map_err(|_| ApiResponseError::InternalError)?;
 
@@ -36,69 +35,108 @@ async fn list(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
 }
 
 #[delete("clear")]
-async fn clear(supervisor: Data<Addr<Supervisor>>) -> Result<impl Responder> {
-    let response = supervisor
-        .send(Clear)
-        .await
-        .map(|_| HttpResponse::Ok())
-        .map_err(|_| ApiResponseError::InternalError)?;
+async fn clear(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
+    repository
+        .write()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .clear();
 
-    Ok(response)
+    Ok(HttpResponse::Ok())
 }
 
 #[post("create")]
 async fn create(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     policy_type: Json<PolicyType>,
 ) -> Result<impl Responder> {
-    let policy_type = policy_type.into_inner();
-    let response = supervisor
-        .send(CreateExperiment {
-            experiment_id: None,
-            policy_type,
-        })
+    let policy_type = policy_type.into_inner().into_inner();
+    let experiment_id = repository
+        .write()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .create_experiment(None, policy_type);
+
+    Ok(Json(CreateExperimentResponse { experiment_id }))
+}
+
+#[get("{experiment_id}/ping")]
+async fn ping_experiment(
+    repository: Data<RwLock<Repository>>,
+    experiment_id: Path<String>,
+) -> Result<impl Responder> {
+    let experiment_id =
+        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .ping_experiment(experiment_id)
         .await
-        .map(|experiment_id| Json(CreateExperimentResponse { experiment_id }))
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map(|_| HttpResponse::Ok())
+        .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
 }
 
 #[put("{experiment_id}/reset")]
 async fn reset(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let response = supervisor
-        .send(ResetExperiment { experiment_id })
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .reset_experiment(experiment_id, None, None, None)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map_err(ApiResponseError::ErrorBadRequest)?;
+
+    Ok(response)
+}
+
+#[post("{experiment_id}/reset/{arm_id}")]
+async fn reset_arm(
+    repository: Data<RwLock<Repository>>,
+    experiment_id: Path<String>,
+    arm_id: Path<usize>,
+    payload: Json<ResetArmPayload>,
+) -> Result<impl Responder> {
+    let experiment_id =
+        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let arm_id = arm_id.into_inner();
+    let ResetArmPayload { reward, count } = payload.into_inner();
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .reset_experiment(experiment_id, Some(arm_id), reward, count)
+        .await
+        .map(|_| HttpResponse::Ok())
+        .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
 }
 
 #[delete("{experiment_id}/delete")]
-async fn delete(
-    supervisor: Data<Addr<Supervisor>>,
+async fn delete_experiment(
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let response = supervisor
-        .send(DeleteExperiment { experiment_id })
-        .await
+    let response = repository
+        .write()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .delete_experiment(experiment_id)
         .map(|_| HttpResponse::Ok())
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map_err(RepositoryOrExperimentError::Repository)
+        .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
 }
 
 #[post("{experiment_id}/add_arm")]
 async fn add_arm(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
     initial_state: Json<AddArmPayload>,
 ) -> Result<impl Responder> {
@@ -108,73 +146,56 @@ async fn add_arm(
         initial_reward,
         initial_count,
     } = initial_state.into_inner();
-    let response = supervisor
-        .send(AddExperimentArm {
-            experiment_id,
-            initial_reward,
-            initial_count,
-        })
-        .await
+    let arm_id = repository
+        .read()
         .map_err(|_| ApiResponseError::InternalError)?
-        .map(|arm_id| Json(AddExperimentArmResponse { arm_id }))
+        .add_experiment_arm(experiment_id, initial_reward, initial_count)
+        .await
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
-    Ok(response)
+    Ok(Json(AddExperimentArmResponse { arm_id }))
 }
 
 #[delete("{experiment_id}/delete_arm/{arm_id}")]
 async fn delete_arm(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
     arm_id: Path<usize>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let arm_id = arm_id.into_inner();
-    let response = supervisor
-        .send(DeleteExperimentArm {
-            experiment_id,
-            arm_id,
-        })
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .delete_experiment_arm(experiment_id, arm_id)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
 }
 
 #[get("{experiment_id}/draw")]
 async fn draw(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let response = supervisor
-        .send(DrawExperiment { experiment_id })
-        .await
+    let draw_result = repository
+        .read()
         .map_err(|_| ApiResponseError::InternalError)?
-        .map(
-            |DrawResult {
-                 timestamp,
-                 draw_id,
-                 arm_id,
-             }| {
-                Json(DrawResponse {
-                    timestamp,
-                    draw_id,
-                    arm_id,
-                })
-            },
-        )
+        .draw_experiment(experiment_id)
+        .await
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
-    Ok(response)
+    Ok(Json(DrawResponse::from(draw_result)))
 }
 
 #[put("{experiment_id}/update")]
 async fn update(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
     payload: Json<UpdatePayload>,
 ) -> Result<impl Responder> {
@@ -186,56 +207,55 @@ async fn update(
         arm_id,
         reward,
     } = payload.into_inner();
-    let response = supervisor
-        .send(UpdateExperiment {
-            experiment_id,
-            draw_id,
-            timestamp,
-            arm_id,
-            reward,
-        })
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .update_experiment(experiment_id, draw_id, timestamp, arm_id, reward)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
 }
 
 #[put("{experiment_id}/update_batch")]
 async fn update_batch(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
     payload: Json<UpdateBatchPayload>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let UpdateBatchPayload { updates } = payload.into_inner();
-    let response = supervisor
-        .send(UpdateBatchExperiment {
-            experiment_id,
-            updates: updates
-                .iter()
-                .map(|u| (u.draw_id, u.timestamp, u.arm_id, u.reward))
-                .collect(),
-        })
+    let updates = payload
+        .into_inner()
+        .updates
+        .iter()
+        .map(|u| (u.draw_id, u.timestamp, u.arm_id, u.reward))
+        .collect();
+
+    let response = repository
+        .read()
+        .map_err(|_| ApiResponseError::InternalError)?
+        .batch_update_experiment(experiment_id, updates)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
 }
 
 #[get("{experiment_id}/stats")]
 async fn stats(
-    supervisor: Data<Addr<Supervisor>>,
+    repository: Data<RwLock<Repository>>,
     experiment_id: Path<String>,
 ) -> Result<impl Responder> {
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let response = supervisor
-        .send(GetExperimentStats { experiment_id })
-        .await
+    let response = repository
+        .read()
         .map_err(|_| ApiResponseError::InternalError)?
+        .get_experiment_stats(experiment_id)
+        .await
         .map(Json)
         .map_err(ApiResponseError::ErrorBadRequest)?;
 

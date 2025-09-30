@@ -1,6 +1,6 @@
-use super::errors::ExperimentOrPolicyError;
 use super::experiment_cache::{ExperimentCache, InsertExperimentCache};
 
+use crate::errors::ExperimentOrPolicyError;
 use crate::policies::{DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
@@ -12,7 +12,7 @@ pub struct Experiment {
     id: Uuid,
     policy: Box<dyn Policy + Send>,
     cache: Addr<ExperimentCache>,
-    cache_every: u64,
+    save_every: u64,
 }
 
 impl Experiment {
@@ -20,18 +20,18 @@ impl Experiment {
         id: Uuid,
         policy: Box<dyn Policy + Send>,
         cache: Addr<ExperimentCache>,
-        cache_every: u64,
+        save_every: u64,
     ) -> Self {
         Self {
             id,
             policy,
             cache,
-            cache_every,
+            save_every,
         }
     }
 
-    fn cache(&self) {
-        info!("Caching policy for experiment {}", &self.id);
+    fn persist(&self) {
+        info!("Persisting policy state for experiment {}", &self.id);
         self.cache.do_send(InsertExperimentCache {
             experiment_id: self.id,
             policy: self.policy.clone_box(),
@@ -44,23 +44,24 @@ impl Actor for Experiment {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         info!("Starting actor for experiment {}", self.id);
-        ctx.run_interval(Duration::from_secs(self.cache_every), |experiment, _| {
-            experiment.cache();
+        ctx.run_interval(Duration::from_secs(self.save_every), |experiment, _| {
+            experiment.persist();
         });
     }
 }
 
 // Messages
 #[derive(Message)]
-#[rtype(result = "Pong")]
+#[rtype(result = "()")]
 pub struct Ping;
 
-#[derive(MessageResponse)]
-pub struct Pong;
-
 #[derive(Message)]
-#[rtype(result = "()")]
-pub struct Reset;
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
+pub struct Reset {
+    pub arm_id: Option<usize>,
+    pub reward: Option<f64>,
+    pub count: Option<u64>,
+}
 
 #[derive(Message)]
 #[rtype(result = "usize")]
@@ -99,18 +100,18 @@ pub struct UpdateBatch {
 pub struct GetStats;
 
 impl Handler<Ping> for Experiment {
-    type Result = Pong;
+    type Result = ();
 
-    fn handle(&mut self, _: Ping, _: &mut Self::Context) -> Self::Result {
-        Pong
-    }
+    fn handle(&mut self, _: Ping, _: &mut Self::Context) -> Self::Result {}
 }
 
 impl Handler<Reset> for Experiment {
-    type Result = ();
+    type Result = Result<(), ExperimentOrPolicyError>;
 
-    fn handle(&mut self, _: Reset, _: &mut Self::Context) -> Self::Result {
-        self.policy.reset()
+    fn handle(&mut self, msg: Reset, _: &mut Self::Context) -> Self::Result {
+        self.policy
+            .reset(msg.arm_id, msg.reward, msg.count)
+            .map_err(ExperimentOrPolicyError::from)
     }
 }
 

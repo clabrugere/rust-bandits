@@ -8,6 +8,12 @@ pub struct AddArmPayload {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ResetArmPayload {
+    pub reward: Option<f64>,
+    pub count: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct UpdatePayload {
     pub draw_id: Uuid,
     pub timestamp: u128,

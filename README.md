@@ -16,9 +16,11 @@ The HTTP server is implemented using [actix-web](https://actix.rs/) framework an
 
 In this paradigm, an actor is an independent entity that manages its own state and interacts with its environment - such as other actors - using asynchronous message passing only. Messages received are enqueued and processed sequentially within an actor, avoiding the complexities of lock mechanisms.
 
-In our system, the HTTP server interacts with a **supervisor** actor that is responsible for managing the different experiments. Each experiment is an actor implementing some policy, handling the variant optimization. The supervisor either creates or deletes experiments, or simply dispatch a message to a running experiment. This allows to have low coupling between experiments and to process requests for different experiments in a non blocking way. 
+In our system, the HTTP server interacts with a **Repository** that is responsible for managing the different experiments. It is not an actor to avoid contention. Instead, it stores a hashmap of experiment addresses, wrapped in a RwLock for concurrent reads and blocking writes. We assume the system will be used to access individual actors through message passing (so repository reads), and more rarely addition/deletion of experiments (repository writes).
 
-The supervisor periodically checks the health of the experiments it manages and can restart them from a past cached state if they become unresponsive. Individual experiments periodically send their state to a cache actor, that is also persisted to disk for recovery in case of an application crash.
+Each experiment is an actor implementing some policy, handling the optimization. The repository either creates or deletes experiments, or simply dispatch a message to a running experiment. This allows to have low coupling between experiments and to process requests for different experiments in a non blocking way. 
+
+Individual experiments periodically send their state to a cache actor, that is also persisted to disk for recovery in case of an application crash.
 
 Finally, every request along with the response is processed by a middleware and sent to an **accountant** actor, responsible for tracking. It interacts with some storage to persist logs (such as a relational database) while not blocking the rest of the application.
 

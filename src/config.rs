@@ -19,13 +19,8 @@ pub struct ExperimentCacheConfig {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SupervisorConfig {
-    pub ping_every: u64,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct ExperimentConfig {
-    pub cache_every: u64,
+    pub save_every: u64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,7 +28,6 @@ pub struct AppConfig {
     pub server: ServerConfig,
     pub accountant: AccountantConfig,
     pub experiment_cache: ExperimentCacheConfig,
-    pub supervisor: SupervisorConfig,
     pub experiment: ExperimentConfig,
 }
 

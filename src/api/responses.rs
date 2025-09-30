@@ -1,4 +1,7 @@
-use crate::actors::accountant::{Accountant, LogResponse};
+use crate::{
+    actors::accountant::{Accountant, LogResponse},
+    policies::DrawResult,
+};
 
 use actix::Addr;
 use actix_http::h1;
@@ -119,4 +122,14 @@ pub struct DrawResponse {
     pub timestamp: u128,
     pub draw_id: Uuid,
     pub arm_id: usize,
+}
+
+impl From<DrawResult> for DrawResponse {
+    fn from(draw_result: DrawResult) -> Self {
+        Self {
+            timestamp: draw_result.timestamp,
+            draw_id: draw_result.draw_id,
+            arm_id: draw_result.arm_id,
+        }
+    }
 }

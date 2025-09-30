@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedyArm {
     reward: f64,
-    draws: u64,
+    count: u64,
     is_active: bool,
 }
 
@@ -21,7 +21,7 @@ impl Default for EpsilonGreedyArm {
     fn default() -> Self {
         Self {
             reward: 0.0,
-            draws: 0,
+            count: 0,
             is_active: true,
         }
     }
@@ -50,19 +50,19 @@ impl Ord for EpsilonGreedyArm {
 }
 
 impl Arm for EpsilonGreedyArm {
-    fn reset(&mut self) {
-        self.reward = 0.0;
-        self.draws = 0;
+    fn reset(&mut self, reward: Option<f64>, count: Option<u64>) {
+        self.reward = reward.unwrap_or_default();
+        self.count = count.unwrap_or_default();
     }
 
     fn update(&mut self, reward: f64, _: Option<f64>) {
-        self.draws += 1;
-        self.reward += (reward - self.reward) / (self.draws as f64);
+        self.count += 1;
+        self.reward += (reward - self.reward) / (self.count as f64);
     }
 
     fn stats(&self) -> ArmStats {
         ArmStats {
-            pulls: self.draws,
+            pulls: self.count,
             mean_reward: self.reward,
             is_active: self.is_active,
         }
@@ -98,17 +98,32 @@ impl CloneBoxedPolicy for EpsilonGreedy {
 
 #[typetag::serde]
 impl Policy for EpsilonGreedy {
-    fn reset(&mut self) {
-        self.arms.values_mut().for_each(|arm| arm.reset());
+    fn reset(
+        &mut self,
+        arm_id: Option<usize>,
+        reward: Option<f64>,
+        count: Option<u64>,
+    ) -> Result<(), PolicyError> {
+        if let Some(arm_id) = arm_id {
+            if let Some(arm) = self.arms.get_mut(&arm_id) {
+                arm.reset(reward, count);
+                Ok(())
+            } else {
+                Err(PolicyError::ArmNotFound(arm_id))
+            }
+        } else {
+            self.arms.values_mut().for_each(|arm| arm.reset(None, None));
+            Ok(())
+        }
     }
 
-    fn add_arm(&mut self, initial_value: f64, initial_count: u64) -> usize {
+    fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize {
         let arm_id = self.arms.len();
         self.arms.insert(
             arm_id,
             EpsilonGreedyArm {
-                reward: initial_value,
-                draws: initial_count,
+                reward: initial_reward,
+                count: initial_count,
                 is_active: true,
             },
         );
