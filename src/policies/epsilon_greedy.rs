@@ -1,6 +1,6 @@
 use super::arm::{Arm, ArmStats};
 use super::errors::PolicyError;
-use super::policy::{CloneBoxedPolicy, DrawResult, Policy, PolicyStats, Update};
+use super::policy::{BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats};
 use super::rng::MaybeSeededRng;
 
 use rand::{seq::IteratorRandom, Rng};
@@ -195,7 +195,7 @@ impl Policy for EpsilonGreedy {
         Ok(())
     }
 
-    fn update_batch(&mut self, updates: &[Update]) -> Result<(), PolicyError> {
+    fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError> {
         updates
             .iter()
             .try_for_each(|&(draw_id, timestamp, arm_id, reward)| {

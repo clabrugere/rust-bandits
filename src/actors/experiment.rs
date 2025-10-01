@@ -1,7 +1,7 @@
 use super::experiment_cache::{ExperimentCache, InsertExperimentCache};
 
 use crate::errors::ExperimentOrPolicyError;
-use crate::policies::{DrawResult, Policy, PolicyStats};
+use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
 use log::info;
@@ -92,7 +92,7 @@ pub struct Update {
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct UpdateBatch {
-    pub updates: Vec<(Uuid, u128, usize, f64)>,
+    pub updates: Vec<BatchUpdateElement>,
 }
 
 #[derive(Message)]
