@@ -157,8 +157,11 @@ impl Handler<UpdateBatch> for Experiment {
     type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: UpdateBatch, _: &mut Self::Context) -> Self::Result {
+        let mut updates = msg.updates;
+        updates.sort_unstable_by_key(|a| a.0);
+
         self.policy
-            .update_batch(&msg.updates)
+            .update_batch(&updates)
             .map_err(ExperimentOrPolicyError::from)
     }
 }

@@ -6,7 +6,7 @@ use crate::actors::experiment::{
     AddArm, DeleteArm, Draw, GetStats, Ping, Reset, Update, UpdateBatch,
 };
 use crate::config::ExperimentConfig;
-use crate::policies::{DrawResult, Policy, PolicyStats};
+use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
 use std::collections::HashMap;
@@ -192,7 +192,7 @@ impl Repository {
     pub async fn batch_update_experiment(
         &self,
         experiment_id: Uuid,
-        updates: Vec<(u128, usize, f64)>,
+        updates: Vec<BatchUpdateElement>,
     ) -> Result<(), RepositoryOrExperimentError> {
         self.send_to_experiment(experiment_id, UpdateBatch { updates })
             .await?

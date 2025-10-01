@@ -17,7 +17,7 @@ pub struct ThomsonSamplingArm {
     beta: f64,
     count: u64,
     discount_factor: f64,
-    last_ts: Option<u128>,
+    last_ts: u128,
     is_active: bool,
 }
 
@@ -28,21 +28,23 @@ impl ThomsonSamplingArm {
             beta: (count as f64) - reward + 1.0,
             count,
             discount_factor,
-            last_ts: None,
+            last_ts: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis(),
             is_active: true,
         }
     }
 
     fn apply_discount(&mut self, timestamp: u128) {
-        if let Some(last_ts) = self.last_ts {
-            let dt = (timestamp - last_ts) as f64;
-            if dt != 0.0 {
-                let discount = (self.discount_factor.ln() * dt).exp();
-                self.alpha *= discount;
-                self.beta *= discount;
-            }
+        let dt = (timestamp - self.last_ts) as f64;
+        if dt != 0.0 {
+            let discount = (self.discount_factor.ln() * dt).exp();
+            self.alpha *= discount;
+            self.beta *= discount;
         }
-        self.last_ts = Some(timestamp);
+
+        self.last_ts = timestamp;
     }
 }
 
@@ -57,7 +59,10 @@ impl Arm for ThomsonSamplingArm {
             self.beta = 1.0;
             self.count = 0;
         }
-        self.last_ts = None;
+        self.last_ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
     }
 
     fn update(&mut self, reward: f64, timestamp: u128) {
