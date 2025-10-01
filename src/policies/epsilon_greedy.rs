@@ -105,16 +105,14 @@ impl Policy for EpsilonGreedy {
         count: Option<u64>,
     ) -> Result<(), PolicyError> {
         if let Some(arm_id) = arm_id {
-            if let Some(arm) = self.arms.get_mut(&arm_id) {
-                arm.reset(reward, count);
-                Ok(())
-            } else {
-                Err(PolicyError::ArmNotFound(arm_id))
-            }
+            self.arms
+                .get_mut(&arm_id)
+                .map(|arm| arm.reset(reward, count))
+                .ok_or(PolicyError::ArmNotFound(arm_id))?;
         } else {
             self.arms.values_mut().for_each(|arm| arm.reset(None, None));
-            Ok(())
         }
+        Ok(())
     }
 
     fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize {
@@ -131,12 +129,10 @@ impl Policy for EpsilonGreedy {
     }
 
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
-        if self.arms.contains_key(&arm_id) {
-            self.arms.remove(&arm_id);
-            Ok(())
-        } else {
-            Err(PolicyError::ArmNotFound(arm_id))
-        }
+        self.arms
+            .remove(&arm_id)
+            .ok_or(PolicyError::ArmNotFound(arm_id))?;
+        Ok(())
     }
 
     fn draw(&mut self) -> Result<DrawResult, PolicyError> {
@@ -169,19 +165,13 @@ impl Policy for EpsilonGreedy {
                     arm_id,
                 })
                 .ok_or(PolicyError::NoArmsAvailable)
-        };
+        }?;
 
         // store draw for future update
-        if let Ok(DrawResult {
-            draw_id,
-            timestamp,
-            arm_id,
-        }) = result
-        {
-            self.draw_history.insert((draw_id, arm_id), timestamp);
-        }
+        self.draw_history
+            .insert((result.draw_id, result.arm_id), timestamp);
 
-        result
+        Ok(result)
     }
 
     fn update(
@@ -192,16 +182,17 @@ impl Policy for EpsilonGreedy {
         reward: f64,
     ) -> Result<(), PolicyError> {
         // check if we can match the update with a previous draw and pop it if found
-        if let Some(arm) = self.arms.get_mut(&arm_id) {
-            if let Some(_) = self.draw_history.remove(&(draw_id, arm_id)) {
-                arm.update(reward, None);
-                Ok(())
-            } else {
-                Err(PolicyError::DrawNotFound(draw_id, arm_id))
-            }
-        } else {
-            Err(PolicyError::ArmNotFound(arm_id))
-        }
+        self.draw_history
+            .remove(&(draw_id, arm_id))
+            .ok_or(PolicyError::DrawNotFound(draw_id, arm_id))?;
+
+        // update the arm statistics
+        self.arms
+            .get_mut(&arm_id)
+            .ok_or(PolicyError::ArmNotFound(arm_id))?
+            .update(reward, None);
+
+        Ok(())
     }
 
     fn update_batch(&mut self, updates: &[Update]) -> Result<(), PolicyError> {
