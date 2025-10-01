@@ -20,7 +20,7 @@ use api::routes::{
 use config::AppConfig;
 use log::warn;
 use std::io::Error;
-use std::sync::RwLock;
+use tokio::sync::RwLock;
 
 use crate::{
     api::routes::{ping_experiment, reset_arm},
@@ -39,12 +39,7 @@ async fn main() -> Result<(), Error> {
         policy_cache.clone(),
     )));
 
-    match repository
-        .write()
-        .map_err(|err| Error::new(std::io::ErrorKind::Other, err.to_string()))?
-        .load_experiments()
-        .await
-    {
+    match repository.write().await.load_experiments().await {
         Ok(_) => (),
         Err(err) => {
             warn!(

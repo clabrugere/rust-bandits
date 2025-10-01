@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use tokio::sync::RwLock;
 
 use super::errors::ApiResponseError;
 use super::requests::{AddArmPayload, UpdateBatchPayload, UpdatePayload};
@@ -26,7 +26,7 @@ async fn ping() -> Result<impl Responder> {
 async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .list_experiments()
         .map(|experiment_ids| Json(ListExperimentsResponse { experiment_ids }))
         .map_err(|_| ApiResponseError::InternalError)?;
@@ -36,10 +36,7 @@ async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
 
 #[delete("clear")]
 async fn clear(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
-    repository
-        .write()
-        .map_err(|_| ApiResponseError::InternalError)?
-        .clear();
+    repository.write().await.clear();
 
     Ok(HttpResponse::Ok())
 }
@@ -52,7 +49,7 @@ async fn create(
     let policy_type = policy_type.into_inner().into_inner();
     let experiment_id = repository
         .write()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .create_experiment(None, policy_type);
 
     Ok(Json(CreateExperimentResponse { experiment_id }))
@@ -67,7 +64,7 @@ async fn ping_experiment(
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .ping_experiment(experiment_id)
         .await
         .map(|_| HttpResponse::Ok())
@@ -85,7 +82,7 @@ async fn reset(
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .reset_experiment(experiment_id, None, None, None)
         .await
         .map(|_| HttpResponse::Ok())
@@ -107,7 +104,7 @@ async fn reset_arm(
     let ResetArmPayload { reward, count } = payload.into_inner();
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .reset_experiment(experiment_id, Some(arm_id), reward, count)
         .await
         .map(|_| HttpResponse::Ok())
@@ -125,7 +122,7 @@ async fn delete_experiment(
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .write()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .delete_experiment(experiment_id)
         .map(|_| HttpResponse::Ok())
         .map_err(RepositoryOrExperimentError::Repository)
@@ -148,7 +145,7 @@ async fn add_arm(
     } = initial_state.into_inner();
     let arm_id = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .add_experiment_arm(experiment_id, initial_reward, initial_count)
         .await
         .map_err(ApiResponseError::ErrorBadRequest)?;
@@ -167,7 +164,7 @@ async fn delete_arm(
     let arm_id = arm_id.into_inner();
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .delete_experiment_arm(experiment_id, arm_id)
         .await
         .map(|_| HttpResponse::Ok())
@@ -185,7 +182,7 @@ async fn draw(
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let draw_result = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .draw_experiment(experiment_id)
         .await
         .map_err(ApiResponseError::ErrorBadRequest)?;
@@ -209,7 +206,7 @@ async fn update(
     } = payload.into_inner();
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .update_experiment(experiment_id, draw_id, timestamp, arm_id, reward)
         .await
         .map(|_| HttpResponse::Ok())
@@ -235,7 +232,7 @@ async fn update_batch(
 
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .batch_update_experiment(experiment_id, updates)
         .await
         .map(|_| HttpResponse::Ok())
@@ -253,7 +250,7 @@ async fn stats(
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
-        .map_err(|_| ApiResponseError::InternalError)?
+        .await
         .get_experiment_stats(experiment_id)
         .await
         .map(Json)

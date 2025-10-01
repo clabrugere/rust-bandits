@@ -46,14 +46,11 @@ impl Repository {
         &self,
         experiment_id: Uuid,
     ) -> Result<Addr<Experiment>, RepositoryOrExperimentError> {
-        self.experiments
-            .get(&experiment_id)
-            .cloned()
-            .ok_or_else(|| {
-                RepositoryOrExperimentError::Repository(RepositoryError::ExperimentNotFound(
-                    experiment_id,
-                ))
-            })
+        self.experiments.get(&experiment_id).cloned().ok_or(
+            RepositoryOrExperimentError::Repository(RepositoryError::ExperimentNotFound(
+                experiment_id,
+            )),
+        )
     }
 
     async fn send_to_experiment<M>(
@@ -87,7 +84,7 @@ impl Repository {
         Ok(self.experiments.keys().cloned().collect())
     }
 
-    pub fn clear(&mut self) -> () {
+    pub fn clear(&mut self) {
         self.experiments.clear();
     }
 
