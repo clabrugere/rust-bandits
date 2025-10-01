@@ -5,11 +5,9 @@ use super::thomson_sampling::ThomsonSampling;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 #[derive(Debug)]
 pub struct DrawResult {
-    pub draw_id: Uuid,
     pub timestamp: u128,
     pub arm_id: usize,
 }

@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedyArm {
@@ -127,7 +126,6 @@ impl Policy for EpsilonGreedy {
     }
 
     fn draw(&mut self) -> Result<DrawResult, PolicyError> {
-        let draw_id = Uuid::new_v4();
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -149,11 +147,7 @@ impl Policy for EpsilonGreedy {
                 .ok_or(PolicyError::NoArmsAvailable)
         }?;
 
-        Ok(DrawResult {
-            timestamp,
-            draw_id,
-            arm_id,
-        })
+        Ok(DrawResult { timestamp, arm_id })
     }
 
     fn update(&mut self, timestamp: u128, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
