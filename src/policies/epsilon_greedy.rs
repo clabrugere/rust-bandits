@@ -1,6 +1,8 @@
 use super::arm::{Arm, ArmStats};
 use super::errors::PolicyError;
-use super::policy::{BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats};
+use super::policy::{
+    BatchUpdateElement, CloneBoxedPolicy, DrawHistoryElement, DrawResult, Policy, PolicyStats,
+};
 use super::rng::MaybeSeededRng;
 
 use rand::{seq::IteratorRandom, Rng};
@@ -68,8 +70,6 @@ impl Arm for EpsilonGreedyArm {
         }
     }
 }
-
-type DrawHistoryElement = (Uuid, usize);
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedy {

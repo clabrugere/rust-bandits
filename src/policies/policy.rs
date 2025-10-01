@@ -13,6 +13,7 @@ pub struct DrawResult {
     pub arm_id: usize,
 }
 
+pub type DrawHistoryElement = (Uuid, usize);
 pub type BatchUpdateElement = (Uuid, u128, usize, f64);
 
 #[derive(Clone, Debug, Serialize)]
