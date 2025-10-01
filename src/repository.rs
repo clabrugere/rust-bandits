@@ -173,7 +173,6 @@ impl Repository {
     pub async fn update_experiment(
         &self,
         experiment_id: Uuid,
-        draw_id: Uuid,
         timestamp: u128,
         arm_id: usize,
         reward: f64,
@@ -181,7 +180,6 @@ impl Repository {
         self.send_to_experiment(
             experiment_id,
             Update {
-                draw_id,
                 timestamp,
                 arm_id,
                 reward,
@@ -194,7 +192,7 @@ impl Repository {
     pub async fn batch_update_experiment(
         &self,
         experiment_id: Uuid,
-        updates: Vec<(Uuid, u128, usize, f64)>,
+        updates: Vec<(u128, usize, f64)>,
     ) -> Result<(), RepositoryOrExperimentError> {
         self.send_to_experiment(experiment_id, UpdateBatch { updates })
             .await?

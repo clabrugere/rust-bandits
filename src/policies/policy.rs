@@ -14,8 +14,7 @@ pub struct DrawResult {
     pub arm_id: usize,
 }
 
-pub type DrawHistoryElement = (Uuid, usize);
-pub type BatchUpdateElement = (Uuid, u128, usize, f64);
+pub type BatchUpdateElement = (u128, usize, f64);
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PolicyStats {
@@ -69,13 +68,7 @@ pub trait Policy: Send + CloneBoxedPolicy {
     fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
     fn draw(&mut self) -> Result<DrawResult, PolicyError>;
-    fn update(
-        &mut self,
-        draw_id: Uuid,
-        timestamp: u128,
-        arm_id: usize,
-        reward: f64,
-    ) -> Result<(), PolicyError>;
+    fn update(&mut self, timestamp: u128, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
     fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
 }

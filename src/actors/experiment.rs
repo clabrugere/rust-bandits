@@ -83,7 +83,6 @@ pub struct Draw;
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct Update {
-    pub draw_id: Uuid,
     pub timestamp: u128,
     pub arm_id: usize,
     pub reward: f64,
@@ -149,7 +148,7 @@ impl Handler<Update> for Experiment {
 
     fn handle(&mut self, msg: Update, _: &mut Self::Context) -> Self::Result {
         self.policy
-            .update(msg.draw_id, msg.timestamp, msg.arm_id, msg.reward)
+            .update(msg.timestamp, msg.arm_id, msg.reward)
             .map_err(ExperimentOrPolicyError::from)
     }
 }

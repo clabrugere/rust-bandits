@@ -199,7 +199,6 @@ async fn update(
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let UpdatePayload {
-        draw_id,
         timestamp,
         arm_id,
         reward,
@@ -207,7 +206,7 @@ async fn update(
     let response = repository
         .read()
         .await
-        .update_experiment(experiment_id, draw_id, timestamp, arm_id, reward)
+        .update_experiment(experiment_id, timestamp, arm_id, reward)
         .await
         .map(|_| HttpResponse::Ok())
         .map_err(ApiResponseError::ErrorBadRequest)?;
@@ -227,7 +226,7 @@ async fn update_batch(
         .into_inner()
         .updates
         .iter()
-        .map(|u| (u.draw_id, u.timestamp, u.arm_id, u.reward))
+        .map(|u| (u.timestamp, u.arm_id, u.reward))
         .collect();
 
     let response = repository
