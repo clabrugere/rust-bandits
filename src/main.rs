@@ -7,7 +7,7 @@ mod repository;
 
 use actix::prelude::*;
 use actix_web::{
-    middleware::{from_fn, Logger},
+    middleware::from_fn,
     web::{scope, Data},
     App, HttpServer,
 };
@@ -18,9 +18,10 @@ use api::routes::{
     update_batch,
 };
 use config::AppConfig;
-use log::warn;
 use std::io::Error;
 use tokio::sync::RwLock;
+use tracing::warn;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{
     api::routes::{ping_experiment, reset_arm},
@@ -30,7 +31,15 @@ use crate::{
 #[actix_web::main]
 async fn main() -> Result<(), Error> {
     let config = AppConfig::from_env().expect("Failed to load configuration");
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or(config.server.log_level));
+
+    // Initialize tracing subscriber with env filter
+    tracing_subscriber::registry()
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new(&config.server.log_level)),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let accountant = Data::new(Accountant::new(config.accountant).start());
     let policy_cache = ExperimentCache::new(config.experiment_cache).start();
@@ -53,7 +62,6 @@ async fn main() -> Result<(), Error> {
         App::new()
             .app_data(accountant.clone())
             .app_data(repository.clone())
-            .wrap(Logger::default())
             .service(ping)
             .service(
                 scope("/v1").service(

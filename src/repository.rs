@@ -9,8 +9,8 @@ use crate::config::ExperimentConfig;
 use crate::policies::{DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
-use log::info;
 use std::collections::HashMap;
+use tracing::info;
 use uuid::Uuid;
 
 pub struct Repository {
@@ -33,10 +33,10 @@ impl Repository {
             .send(ReadFullExperimentCache)
             .await
             .map(|experiments| {
-                info!("Loading {} experiment(s)", experiments.len());
+                info!(num_experiments = %experiments.len(), "Loaded experiments");
                 experiments.iter().for_each(|(&experiment_id, policy)| {
                     self.create_experiment(Some(experiment_id), policy.clone_box());
-                    info!("Loaded experiment {}", experiment_id);
+                    info!(id = %experiment_id, "Loaded experiment");
                 });
             })
             .map_err(|err| RepositoryError::StorageError(err.to_string()))

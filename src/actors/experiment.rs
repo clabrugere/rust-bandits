@@ -4,8 +4,8 @@ use crate::errors::ExperimentOrPolicyError;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
-use log::info;
 use std::time::Duration;
+use tracing::info;
 use uuid::Uuid;
 
 pub struct Experiment {
@@ -31,7 +31,7 @@ impl Experiment {
     }
 
     fn persist(&self) {
-        info!("Persisting policy state for experiment {}", &self.id);
+        info!(id = %self.id, "Persisting policy state for experiment");
         self.cache.do_send(InsertExperimentCache {
             experiment_id: self.id,
             policy: self.policy.clone_box(),
@@ -43,7 +43,7 @@ impl Actor for Experiment {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Starting actor for experiment {}", self.id);
+        info!(id = %self.id, "Starting actor for experiment");
         ctx.run_interval(Duration::from_secs(self.save_every), |experiment, _| {
             experiment.persist();
         });

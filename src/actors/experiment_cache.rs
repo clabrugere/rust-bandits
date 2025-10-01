@@ -2,8 +2,8 @@ use crate::errors::PersistenceError;
 use crate::{config::ExperimentCacheConfig, policies::Policy};
 
 use actix::prelude::*;
-use log::{info, warn};
 use std::{collections::HashMap, fs::File, io::BufReader, time::Duration};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 pub struct ExperimentCache {
@@ -29,8 +29,8 @@ impl ExperimentCache {
         }
 
         info!(
-            "Persisting cache to '{}'",
-            self.config.path.to_str().unwrap_or_default()
+            path = ?self.config.path,
+            "Persisting cache"
         );
 
         let serialized = serde_json::to_string(&self.storage)?;
@@ -48,7 +48,7 @@ impl Actor for ExperimentCache {
             Duration::from_secs(self.config.persist_every),
             |cache, _| {
                 if let Err(err) = cache.persist() {
-                    warn!("Failed to persist cache: {}", err);
+                    warn!(error = %err, "Failed to persist cache");
                 }
             },
         );

@@ -1,7 +1,7 @@
 use crate::{api::responses::LoggedResponse, config::AccountantConfig};
 
 use actix::{Actor, Context, Handler, Message};
-use log::info;
+use tracing::{debug, info};
 
 pub struct Accountant {
     config: AccountantConfig,
@@ -31,8 +31,25 @@ impl Handler<LogResponse> for Accountant {
     type Result = ();
 
     fn handle(&mut self, msg: LogResponse, _: &mut Self::Context) -> Self::Result {
-        let serialized = serde_json::to_string(&msg.response).unwrap_or_default();
-        info!("Logged response:\n{serialized}");
-        //TODO: Implement request logging
+        debug!(
+            id = %msg.response.id,
+            route = %msg.response.route,
+            status = msg.response.status,
+            timestamp = msg.response.timestamp,
+            "Persisting log entry to storage"
+        );
+
+        //TODO: Implement database storage
+        // Example with sqlx:
+        // let pool = self.db_pool.clone();
+        // let log = msg.response;
+        // actix::spawn(async move {
+        //     sqlx::query!(
+        //         "INSERT INTO request_logs (id, timestamp, route, status) VALUES ($1, $2, $3, $4)",
+        //         log.id, log.timestamp as i64, log.route, log.status as i16
+        //     )
+        //     .execute(&pool)
+        //     .await
+        // });
     }
 }
