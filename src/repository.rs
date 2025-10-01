@@ -34,6 +34,7 @@ impl Repository {
             .await
             .map(|experiments| {
                 info!(num_experiments = %experiments.len(), "Loaded experiments");
+
                 experiments.iter().for_each(|(&experiment_id, policy)| {
                     self.create_experiment(Some(experiment_id), policy.clone_box());
                     info!(id = %experiment_id, "Loaded experiment");
@@ -94,14 +95,14 @@ impl Repository {
         policy: Box<dyn Policy + Send>,
     ) -> Uuid {
         let experiment_id = experiment_id.unwrap_or(Uuid::new_v4());
-        let actor = Experiment::new(
+        let actor_addr = Experiment::new(
             experiment_id,
             policy,
             self.cache.clone(),
             self.experiment_config.save_every,
         )
         .start();
-        self.experiments.insert(experiment_id, actor);
+        self.experiments.insert(experiment_id, actor_addr);
 
         experiment_id
     }

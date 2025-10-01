@@ -5,7 +5,8 @@ use super::policy::{
 };
 use super::rng::MaybeSeededRng;
 
-use rand::{seq::IteratorRandom, Rng};
+use rand_distr::Beta;
+use rand_distr::Distribution;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -13,91 +14,79 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpsilonGreedyArm {
-    reward: f64,
+pub struct ThomsonSamplingArm {
+    alpha: f64,
+    beta: f64,
     count: u64,
     is_active: bool,
 }
 
-impl Default for EpsilonGreedyArm {
+impl Default for ThomsonSamplingArm {
     fn default() -> Self {
         Self {
-            reward: 0.0,
+            alpha: 1.0,
+            beta: 1.0,
             count: 0,
             is_active: true,
         }
     }
 }
 
-impl Eq for EpsilonGreedyArm {}
-
-impl PartialEq for EpsilonGreedyArm {
-    fn eq(&self, other: &Self) -> bool {
-        self.reward == other.reward
-    }
-}
-
-impl PartialOrd for EpsilonGreedyArm {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for EpsilonGreedyArm {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.reward
-            .partial_cmp(&other.reward)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl Arm for EpsilonGreedyArm {
+impl Arm for ThomsonSamplingArm {
     fn reset(&mut self, reward: Option<f64>, count: Option<u64>) {
-        self.reward = reward.unwrap_or_default();
-        self.count = count.unwrap_or_default();
+        if let (Some(reward), Some(count)) = (reward, count) {
+            self.alpha = reward + 1.0;
+            self.beta = (count as f64) - reward + 1.0;
+            self.count = count;
+        } else {
+            self.alpha = 1.0;
+            self.beta = 1.0;
+            self.count = 0;
+        }
     }
 
     fn update(&mut self, reward: f64, _: Option<f64>) {
+        self.alpha += reward;
+        self.beta += 1.0 - reward;
         self.count += 1;
-        self.reward += (reward - self.reward) / (self.count as f64);
     }
 
     fn stats(&self) -> ArmStats {
         ArmStats {
             pulls: self.count,
-            mean_reward: self.reward,
+            mean_reward: self.alpha / (self.alpha + self.beta),
             is_active: self.is_active,
         }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpsilonGreedy {
+pub struct ThomsonSampling {
+    discount_factor: f64,
     draw_history: HashMap<DrawHistoryElement, u128>,
-    arms: HashMap<usize, EpsilonGreedyArm>,
-    epsilon: f64,
+    arms: HashMap<usize, ThomsonSamplingArm>,
     rng: MaybeSeededRng,
 }
 
-impl EpsilonGreedy {
-    pub fn new(epsilon: f64, seed: Option<u64>) -> Self {
+impl ThomsonSampling {
+    pub fn new(discount_factor: Option<f64>, seed: Option<u64>) -> Self {
         Self {
+            discount_factor: discount_factor.unwrap_or(1.0),
             draw_history: HashMap::new(),
             arms: HashMap::new(),
-            epsilon,
             rng: MaybeSeededRng::new(seed),
         }
     }
 }
 
-impl CloneBoxedPolicy for EpsilonGreedy {
+impl CloneBoxedPolicy for ThomsonSampling {
     fn clone_box(&self) -> Box<dyn Policy + Send> {
         Box::new(self.clone())
     }
 }
 
 #[typetag::serde]
-impl Policy for EpsilonGreedy {
+impl Policy for ThomsonSampling {
     fn reset(
         &mut self,
         arm_id: Option<usize>,
@@ -117,7 +106,7 @@ impl Policy for EpsilonGreedy {
 
     fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize {
         let arm_id = self.arms.len();
-        let mut arm = EpsilonGreedyArm::default();
+        let mut arm = ThomsonSamplingArm::default();
         arm.reset(Some(initial_reward), Some(initial_count));
         self.arms.insert(arm_id, arm);
 
@@ -138,21 +127,20 @@ impl Policy for EpsilonGreedy {
             .unwrap_or_default()
             .as_millis();
 
-        let arm_id = if self.rng.get_rng().random::<f64>() < self.epsilon {
-            self.arms
-                .iter()
-                .filter(|(_, arm)| arm.is_active)
-                .map(|(&arm_id, _)| arm_id)
-                .choose(&mut self.rng.get_rng())
-                .ok_or(PolicyError::NoArmsAvailable)
-        } else {
-            self.arms
-                .iter()
-                .filter(|(_, arm)| arm.is_active)
-                .max_by(|(_, a), (_, b)| a.cmp(b))
-                .map(|(&arm_id, _)| arm_id)
-                .ok_or(PolicyError::NoArmsAvailable)
-        }?;
+        // sample from the beta distribution for each arm and select the arm with the best statistic
+        let arm_id = self
+            .arms
+            .iter()
+            .filter(|(_, arm)| arm.is_active)
+            .flat_map(|(&arm_id, arm)| {
+                let sample = Beta::new(arm.alpha, arm.beta)
+                    .map_err(|_| PolicyError::SamplingError(arm_id))?
+                    .sample(&mut self.rng.get_rng());
+                Ok::<(usize, f64), PolicyError>((arm_id, sample))
+            })
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+            .map(|(arm_id, _)| arm_id)
+            .ok_or(PolicyError::NoArmsAvailable)?;
 
         self.draw_history.insert((draw_id, arm_id), timestamp);
 
@@ -206,13 +194,12 @@ impl Policy for EpsilonGreedy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::SmallRng, Rng, SeedableRng};
 
     const SEED: u64 = 1234;
 
     #[test]
     fn create_arm() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
         assert!(policy.arms.len() == 0);
 
         let arm_id = policy.add_arm(0.0, 0);
@@ -221,7 +208,7 @@ mod tests {
 
     #[test]
     fn delete_arm() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
@@ -230,7 +217,7 @@ mod tests {
 
     #[test]
     fn draw() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_id));
@@ -238,26 +225,26 @@ mod tests {
 
     #[test]
     fn draw_best() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
         let arm_1 = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
-        policy.arms.get_mut(&arm_1).map(|arm| arm.reward = 1.0);
+        policy.arms.get_mut(&arm_1).map(|arm| arm.alpha += 1.0);
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_1));
     }
 
     #[test]
     fn draw_empty() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
         assert!(policy.draw().is_err());
     }
 
     #[test]
     fn update() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm(0.0, 0);
-        let arm_2 = policy.add_arm(0.0, 0);
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
 
         let DrawResult {
             draw_id,
@@ -266,13 +253,13 @@ mod tests {
         } = policy.draw().unwrap();
 
         assert!(policy.update(draw_id, timestamp + 1, arm_id, 1.0).is_ok());
-        assert_eq!(policy.arms.get(&arm_1).map(|arm| arm.reward), Some(1.0));
-        assert_eq!(policy.arms.get(&arm_2).map(|arm| arm.reward), Some(0.0));
+        assert_eq!(policy.arms.get(&arm_id).map(|arm| arm.alpha), Some(2.0));
+        assert_eq!(policy.arms.get(&arm_id).map(|arm| arm.beta), Some(1.0));
     }
 
     #[test]
     fn update_batch() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = ThomsonSampling::new(None, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -285,60 +272,5 @@ mod tests {
             .collect::<Vec<(Uuid, u128, usize, f64)>>();
 
         assert!(policy.update_batch(&updates).is_ok());
-        updates.iter().for_each(|(_, _, arm_id, reward)| {
-            assert_eq!(policy.arms.get(&arm_id).unwrap().reward, *reward);
-        });
-    }
-
-    #[test]
-    fn debug() {
-        let mut rng = SmallRng::seed_from_u64(SEED);
-        let mut policy = EpsilonGreedy::new(0.2, Some(SEED));
-
-        let mut true_values = vec![0.05, 0.2, 0.5];
-        let mut arm_ids = true_values
-            .iter()
-            .map(|_| policy.add_arm(0.0, 0))
-            .collect::<Vec<usize>>();
-
-        for i in 0..1000 {
-            let DrawResult {
-                draw_id,
-                timestamp,
-                arm_id,
-            } = policy.draw().unwrap();
-            let reward = (rng.random::<f64>() < true_values[arm_id]) as i32 as f64;
-            let _ = policy.update(draw_id, timestamp + 1, arm_id, reward);
-
-            if i == 250 {
-                true_values.push(0.8);
-                arm_ids.push(policy.add_arm(0.0, 0));
-            }
-        }
-
-        let stats = policy.stats();
-        let mut rewards = stats
-            .arms
-            .iter()
-            .map(|(arm_id, arm_stats)| (arm_id, arm_stats.mean_reward))
-            .collect::<Vec<(&usize, f64)>>();
-        rewards.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
-
-        println!(
-            "arms: {:?}",
-            arm_ids
-                .iter()
-                .zip(&true_values)
-                .collect::<Vec<(&usize, &f64)>>()
-        );
-        println!("{rewards:?}");
-
-        assert_eq!(
-            rewards
-                .iter()
-                .map(|(&arm_id, _)| arm_id)
-                .collect::<Vec<usize>>(),
-            arm_ids
-        );
     }
 }

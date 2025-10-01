@@ -10,14 +10,14 @@ pub struct MaybeSeededRng {
 }
 
 fn default_rng() -> SmallRng {
-    SmallRng::from_entropy()
+    SmallRng::from_os_rng()
 }
 
 impl MaybeSeededRng {
     pub fn new(seed: Option<u64>) -> Self {
         let rng = match seed {
             Some(seed) => SmallRng::seed_from_u64(seed),
-            None => SmallRng::from_entropy(),
+            None => SmallRng::from_os_rng(),
         };
         Self { seed, rng }
     }

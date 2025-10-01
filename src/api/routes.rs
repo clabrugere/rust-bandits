@@ -46,11 +46,11 @@ async fn create(
     repository: Data<RwLock<Repository>>,
     policy_type: Json<PolicyType>,
 ) -> Result<impl Responder> {
-    let policy_type = policy_type.into_inner().into_inner();
+    let policy_type = policy_type.into_inner();
     let experiment_id = repository
         .write()
         .await
-        .create_experiment(None, policy_type);
+        .create_experiment(None, policy_type.into_inner());
 
     Ok(Json(CreateExperimentResponse { experiment_id }))
 }

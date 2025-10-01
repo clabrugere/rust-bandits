@@ -1,6 +1,7 @@
 use super::arm::ArmStats;
 use super::epsilon_greedy::EpsilonGreedy;
 use super::errors::PolicyError;
+use super::thomson_sampling::ThomsonSampling;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -23,7 +24,14 @@ pub struct PolicyStats {
 
 #[derive(Debug, Deserialize)]
 pub enum PolicyType {
-    EpsilonGreedy { epsilon: f64, seed: Option<u64> },
+    EpsilonGreedy {
+        epsilon: f64,
+        seed: Option<u64>,
+    },
+    ThomsonSampling {
+        discount_factor: Option<f64>,
+        seed: Option<u64>,
+    },
 }
 
 impl PolicyType {
@@ -32,6 +40,10 @@ impl PolicyType {
             PolicyType::EpsilonGreedy { epsilon, seed } => {
                 Box::new(EpsilonGreedy::new(epsilon, seed))
             }
+            PolicyType::ThomsonSampling {
+                discount_factor,
+                seed,
+            } => Box::new(ThomsonSampling::new(discount_factor, seed)),
         }
     }
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{api::responses::LoggedResponse, config::AccountantConfig};
 
 use actix::{Actor, Context, Handler, Message};
