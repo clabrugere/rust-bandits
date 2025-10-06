@@ -9,8 +9,5 @@ port = "8080"
 path = "./cache"
 persist_every = "60"
 
-[supervisor]
-ping_every = "30"
-
 [experiment]
-cache_every = "60"
+save_every = "60"

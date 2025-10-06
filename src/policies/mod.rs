@@ -3,5 +3,6 @@ pub mod epsilon_greedy;
 pub mod errors;
 mod policy;
 mod rng;
+pub mod thomson_sampling;
 
-pub use policy::{Policy, PolicyStats, PolicyType};
+pub use policy::{BatchUpdateElement, DrawResult, Policy, PolicyStats, PolicyType};

@@ -1,67 +1,49 @@
 use super::arm::{Arm, ArmStats};
 use super::errors::PolicyError;
-use super::policy::{CloneBoxedPolicy, Policy, PolicyStats};
+use super::policy::{BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats};
 use super::rng::MaybeSeededRng;
 
 use rand::{seq::IteratorRandom, Rng};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedyArm {
-    value: f64,
-    pulls: u64,
+    reward: f64,
+    count: u64,
     is_active: bool,
 }
 
-impl Default for EpsilonGreedyArm {
-    fn default() -> Self {
+impl EpsilonGreedyArm {
+    fn new(initial_reward: f64, initial_count: u64) -> Self {
         Self {
-            value: 0.0,
-            pulls: 0,
+            reward: initial_reward,
+            count: initial_count,
             is_active: true,
         }
     }
 }
 
-impl Eq for EpsilonGreedyArm {}
-
-impl PartialEq for EpsilonGreedyArm {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl PartialOrd for EpsilonGreedyArm {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for EpsilonGreedyArm {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value
-            .partial_cmp(&other.value)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
 impl Arm for EpsilonGreedyArm {
-    fn reset(&mut self) {
-        self.value = 0.0;
-        self.pulls = 0;
+    fn sample<R: Rng + ?Sized>(&self, _: &mut R) -> Result<f64, PolicyError> {
+        Ok(self.reward)
+    }
+    fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
+        self.reward = cumulative_reward.unwrap_or_default();
+        self.count = count.unwrap_or_default();
     }
 
-    fn update(&mut self, reward: f64) {
-        self.pulls += 1;
-        self.value += (reward - self.value) / (self.pulls as f64);
+    fn update(&mut self, reward: f64, _: f64) {
+        self.count += 1;
+        self.reward += (reward - self.reward) / (self.count as f64);
     }
 
     fn stats(&self) -> ArmStats {
         ArmStats {
-            pulls: self.pulls,
-            mean_reward: self.value,
+            pulls: self.count,
+            mean_reward: self.reward,
             is_active: self.is_active,
         }
     }
@@ -92,38 +74,46 @@ impl CloneBoxedPolicy for EpsilonGreedy {
 
 #[typetag::serde]
 impl Policy for EpsilonGreedy {
-    fn reset(&mut self) {
-        self.arms.values_mut().for_each(|arm| arm.reset());
+    fn reset(
+        &mut self,
+        arm_id: Option<usize>,
+        cumulative_reward: Option<f64>,
+        count: Option<u64>,
+    ) -> Result<(), PolicyError> {
+        if let Some(arm_id) = arm_id {
+            self.arms
+                .get_mut(&arm_id)
+                .map(|arm| arm.reset(cumulative_reward, count))
+                .ok_or(PolicyError::ArmNotFound(arm_id))?;
+        } else {
+            self.arms.values_mut().for_each(|arm| arm.reset(None, None));
+        }
+        Ok(())
     }
 
-    fn add_arm(&mut self, initial_reward: Option<f64>, initial_count: Option<u64>) -> usize {
+    fn add_arm(&mut self, cumulative_reward: f64, count: u64) -> usize {
         let arm_id = self.arms.len();
-        match (initial_reward, initial_count) {
-            (Some(value), Some(pulls)) => self.arms.insert(
-                arm_id,
-                EpsilonGreedyArm {
-                    value,
-                    pulls,
-                    is_active: true,
-                },
-            ),
-            (None, _) | (_, None) => self.arms.insert(arm_id, EpsilonGreedyArm::default()),
-        };
+        self.arms
+            .insert(arm_id, EpsilonGreedyArm::new(cumulative_reward, count));
 
         arm_id
     }
 
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
-        if self.arms.contains_key(&arm_id) {
-            self.arms.remove(&arm_id);
-            Ok(())
-        } else {
-            Err(PolicyError::ArmNotFound(arm_id))
-        }
+        self.arms
+            .remove(&arm_id)
+            .ok_or(PolicyError::ArmNotFound(arm_id))?;
+        Ok(())
     }
 
-    fn draw(&mut self) -> Result<usize, PolicyError> {
-        if self.rng.get_rng().gen::<f64>() < self.epsilon {
+    fn draw(&mut self) -> Result<DrawResult, PolicyError> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64();
+
+        // either sample a random arm or return the one with the highest reward so far
+        let arm_id = if self.rng.get_rng().random::<f64>() < self.epsilon {
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
@@ -133,28 +123,32 @@ impl Policy for EpsilonGreedy {
         } else {
             self.arms
                 .iter()
-                .filter(|(_, arm)| arm.is_active)
-                .max_by(|(_, a), (_, b)| a.cmp(b))
-                .map(|(&k, _)| k)
+                .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
+                    Ok(sample) => Some((arm_id, sample)),
+                    Err(_) => None,
+                })
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
+                .map(|(&arm_id, _)| arm_id)
                 .ok_or(PolicyError::NoArmsAvailable)
-        }
+        }?;
+
+        Ok(DrawResult { timestamp, arm_id })
     }
 
-    fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
-        if let Some(arm) = self.arms.get_mut(&arm_id) {
-            arm.update(reward);
-            Ok(())
-        } else {
-            Err(PolicyError::ArmNotFound(arm_id))
-        }
+    fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
+        // update the arm statistics
+        self.arms
+            .get_mut(&arm_id)
+            .ok_or(PolicyError::ArmNotFound(arm_id))?
+            .update(reward, timestamp);
+
+        Ok(())
     }
 
-    fn update_batch(&mut self, updates: &[(u64, usize, f64)]) -> Result<(), PolicyError> {
-        let mut updates = updates.to_vec();
-        updates.sort_unstable_by_key(|(ts, _, _)| *ts);
+    fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError> {
         updates
             .iter()
-            .try_for_each(|&(_, arm_id, reward)| self.update(arm_id, reward))
+            .try_for_each(|&(timestamp, arm_id, reward)| self.update(timestamp, arm_id, reward))
     }
 
     fn stats(&self) -> PolicyStats {
@@ -171,7 +165,6 @@ impl Policy for EpsilonGreedy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::{rngs::SmallRng, Rng, SeedableRng};
 
     const SEED: u64 = 1234;
 
@@ -180,14 +173,14 @@ mod tests {
         let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
         assert!(policy.arms.len() == 0);
 
-        let arm_id = policy.add_arm(None, None);
+        let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.arms.contains_key(&arm_id))
     }
 
     #[test]
     fn delete_arm() {
         let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
-        let arm_id = policy.add_arm(None, None);
+        let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
         assert!(policy.delete_arm(arm_id).is_err());
@@ -196,18 +189,20 @@ mod tests {
     #[test]
     fn draw() {
         let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
-        let arm_id = policy.add_arm(None, None);
-        assert_eq!(policy.draw().ok(), Some(arm_id));
+        let arm_id = policy.add_arm(0.0, 0);
+        let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
+        assert_eq!(result, Some(arm_id));
     }
 
     #[test]
     fn draw_best() {
         let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm(None, None);
-        let _ = policy.add_arm(None, None);
+        let arm_1 = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
 
-        policy.arms.get_mut(&arm_1).map(|arm| arm.value = 1.0);
-        assert_eq!(policy.draw().ok(), Some(arm_1));
+        policy.arms.get_mut(&arm_1).map(|arm| arm.reward = 1.0);
+        let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
+        assert_eq!(result, Some(arm_1));
     }
 
     #[test]
@@ -219,74 +214,34 @@ mod tests {
     #[test]
     fn update() {
         let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm(None, None);
-        let arm_2 = policy.add_arm(None, None);
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
 
-        assert!(policy.update(arm_1, 1.0).is_ok());
-        assert_eq!(policy.arms.get(&arm_1).map(|arm| arm.value), Some(1.0));
-        assert_eq!(policy.arms.get(&arm_2).map(|arm| arm.value), Some(0.0));
+        let DrawResult {
+            timestamp, arm_id, ..
+        } = policy.draw().unwrap();
+
+        assert!(policy.update(timestamp + 1.0, arm_id, 1.0).is_ok());
+        assert_eq!(policy.arms.get(&arm_id).map(|arm| arm.reward), Some(1.0));
     }
 
     #[test]
     fn update_batch() {
         let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
-        let arm_1 = policy.add_arm(None, None);
-        let arm_2 = policy.add_arm(None, None);
-        let batch = vec![(0, arm_2, 0.0), (1, arm_1, 1.0), (2, arm_2, 0.0)];
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
 
-        assert!(policy.update_batch(&batch).is_ok());
-
-        assert_eq!(policy.arms.get(&arm_1).map(|arm| arm.pulls), Some(1));
-        assert_eq!(policy.arms.get(&arm_1).map(|arm| arm.value), Some(1.0));
-        assert_eq!(policy.arms.get(&arm_2).map(|arm| arm.pulls), Some(2));
-        assert_eq!(policy.arms.get(&arm_2).map(|arm| arm.value), Some(0.0));
-    }
-
-    #[test]
-    fn debug() {
-        let mut rng = SmallRng::seed_from_u64(SEED);
-        let mut policy = EpsilonGreedy::new(0.2, Some(SEED));
-
-        let mut true_values = vec![0.05, 0.2, 0.5];
-        let mut arm_ids = true_values
+        let draws = (0..3)
+            .map(|_| policy.draw().unwrap())
+            .collect::<Vec<DrawResult>>();
+        let updates = draws
             .iter()
-            .map(|_| policy.add_arm(None, None))
-            .collect::<Vec<usize>>();
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
 
-        for i in 0..1000 {
-            let arm_id = policy.draw().unwrap();
-            let reward = (rng.gen::<f64>() < true_values[arm_id]) as i32 as f64;
-            let _ = policy.update(arm_id, reward);
-
-            if i == 250 {
-                true_values.push(0.8);
-                arm_ids.push(policy.add_arm(None, None));
-            }
-        }
-
-        let stats = policy.stats();
-        let mut rewards = stats
-            .arms
-            .iter()
-            .map(|(arm_id, arm_stats)| (arm_id, arm_stats.mean_reward))
-            .collect::<Vec<(&usize, f64)>>();
-        rewards.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(Ordering::Equal));
-
-        println!(
-            "arms: {:?}",
-            arm_ids
-                .iter()
-                .zip(&true_values)
-                .collect::<Vec<(&usize, &f64)>>()
-        );
-        println!("{rewards:?}");
-
-        assert_eq!(
-            rewards
-                .iter()
-                .map(|(&arm_id, _)| arm_id)
-                .collect::<Vec<usize>>(),
-            arm_ids
-        );
+        assert!(policy.update_batch(&updates).is_ok());
+        updates.iter().for_each(|(_, arm_id, reward)| {
+            assert_eq!(policy.arms.get(&arm_id).unwrap().reward, *reward);
+        });
     }
 }

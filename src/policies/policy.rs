@@ -1,9 +1,18 @@
 use super::arm::ArmStats;
 use super::epsilon_greedy::EpsilonGreedy;
 use super::errors::PolicyError;
+use super::thomson_sampling::ThomsonSampling;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+#[derive(Debug)]
+pub struct DrawResult {
+    pub timestamp: f64,
+    pub arm_id: usize,
+}
+
+pub type BatchUpdateElement = (f64, usize, f64);
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PolicyStats {
@@ -12,7 +21,14 @@ pub struct PolicyStats {
 
 #[derive(Debug, Deserialize)]
 pub enum PolicyType {
-    EpsilonGreedy { epsilon: f64, seed: Option<u64> },
+    EpsilonGreedy {
+        epsilon: f64,
+        seed: Option<u64>,
+    },
+    ThomsonSampling {
+        discount_factor: Option<f64>,
+        seed: Option<u64>,
+    },
 }
 
 impl PolicyType {
@@ -21,6 +37,10 @@ impl PolicyType {
             PolicyType::EpsilonGreedy { epsilon, seed } => {
                 Box::new(EpsilonGreedy::new(epsilon, seed))
             }
+            PolicyType::ThomsonSampling {
+                discount_factor,
+                seed,
+            } => Box::new(ThomsonSampling::new(discount_factor, seed)),
         }
     }
 }
@@ -37,11 +57,16 @@ pub trait CloneBoxedPolicy {
 
 #[typetag::serde(tag = "type")]
 pub trait Policy: Send + CloneBoxedPolicy {
-    fn reset(&mut self);
-    fn add_arm(&mut self, initial_reward: Option<f64>, initial_count: Option<u64>) -> usize;
+    fn reset(
+        &mut self,
+        arm_id: Option<usize>,
+        cumulative_reward: Option<f64>,
+        count: Option<u64>,
+    ) -> Result<(), PolicyError>;
+    fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
-    fn draw(&mut self) -> Result<usize, PolicyError>;
-    fn update(&mut self, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
-    fn update_batch(&mut self, updates: &[(u64, usize, f64)]) -> Result<(), PolicyError>;
+    fn draw(&mut self) -> Result<DrawResult, PolicyError>;
+    fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
+    fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
 }

@@ -1,8 +1,12 @@
+use rand::Rng;
 use serde::Serialize;
 
-pub trait Arm: Default + Eq + PartialEq + Ord + PartialOrd {
-    fn reset(&mut self);
-    fn update(&mut self, reward: f64);
+use crate::policies::errors::PolicyError;
+
+pub trait Arm {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Result<f64, PolicyError>;
+    fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>);
+    fn update(&mut self, reward: f64, timestamp: f64);
     fn stats(&self) -> ArmStats;
 }
 

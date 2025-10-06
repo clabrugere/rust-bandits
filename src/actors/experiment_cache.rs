@@ -1,13 +1,9 @@
+use crate::errors::PersistenceError;
 use crate::{config::ExperimentCacheConfig, policies::Policy};
 
 use actix::prelude::*;
-use log::{info, warn};
-use std::{
-    collections::HashMap,
-    fs::{write, File},
-    io::BufReader,
-    time::Duration,
-};
+use std::{collections::HashMap, fs::File, io::BufReader, time::Duration};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 pub struct ExperimentCache {
@@ -27,21 +23,19 @@ impl ExperimentCache {
         Self { storage, config }
     }
 
-    fn persist(&self) {
-        if !&self.storage.is_empty() {
-            info!(
-                "Persisting cache to '{}'",
-                self.config.path.to_str().unwrap_or_default()
-            );
-            match serde_json::to_string(&self.storage) {
-                Ok(serialized) => {
-                    if let Err(err) = write(&self.config.path, serialized) {
-                        warn!("Error while persisting cache to disk: {}", err);
-                    }
-                }
-                Err(err) => warn!("Error while serializing cache: {}", err),
-            }
+    fn persist(&self) -> Result<(), PersistenceError> {
+        if self.storage.is_empty() {
+            return Ok(());
         }
+
+        info!(
+            path = ?self.config.path,
+            "Persisting cache"
+        );
+
+        let serialized = serde_json::to_string(&self.storage)?;
+        std::fs::write(&self.config.path, serialized)?;
+        Ok(())
     }
 }
 
@@ -50,10 +44,14 @@ impl Actor for ExperimentCache {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         info!("Starting experiment cache actor");
-        let persist_every = Duration::from_secs(self.config.persist_every);
-        ctx.run_interval(persist_every, |cache, _| {
-            cache.persist();
-        });
+        ctx.run_interval(
+            Duration::from_secs(self.config.persist_every),
+            |cache, _| {
+                if let Err(err) = cache.persist() {
+                    warn!(error = %err, "Failed to persist cache");
+                }
+            },
+        );
     }
 }
 
