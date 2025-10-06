@@ -8,13 +8,13 @@ pub struct AddArmPayload {
 
 #[derive(Debug, Deserialize)]
 pub struct ResetArmPayload {
-    pub reward: Option<f64>,
+    pub cumulative_reward: Option<f64>,
     pub count: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePayload {
-    pub timestamp: u128,
+    pub timestamp: f64,
     pub arm_id: usize,
     pub reward: f64,
 }

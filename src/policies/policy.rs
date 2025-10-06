@@ -8,11 +8,11 @@ use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct DrawResult {
-    pub timestamp: u128,
+    pub timestamp: f64,
     pub arm_id: usize,
 }
 
-pub type BatchUpdateElement = (u128, usize, f64);
+pub type BatchUpdateElement = (f64, usize, f64);
 
 #[derive(Clone, Debug, Serialize)]
 pub struct PolicyStats {
@@ -60,13 +60,13 @@ pub trait Policy: Send + CloneBoxedPolicy {
     fn reset(
         &mut self,
         arm_id: Option<usize>,
-        reward: Option<f64>,
+        cumulative_reward: Option<f64>,
         count: Option<u64>,
     ) -> Result<(), PolicyError>;
     fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
     fn draw(&mut self) -> Result<DrawResult, PolicyError>;
-    fn update(&mut self, timestamp: u128, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
+    fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
     fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
 }

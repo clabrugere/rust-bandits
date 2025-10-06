@@ -3,6 +3,7 @@ use super::errors::PolicyError;
 use super::policy::{BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats};
 use super::rng::MaybeSeededRng;
 
+use rand::Rng;
 use rand_distr::Beta;
 use rand_distr::Distribution;
 use serde::{Deserialize, Serialize};
@@ -10,48 +11,66 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const EPS: f64 = 1e-6;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThomsonSamplingArm {
     alpha: f64,
     beta: f64,
     count: u64,
-    discount_factor: f64,
-    last_ts: u128,
+    halflife_seconds: Option<f64>,
+    last_ts: f64,
     is_active: bool,
 }
 
 impl ThomsonSamplingArm {
-    fn new(reward: f64, count: u64, discount_factor: f64) -> Self {
+    fn new(initial_reward: f64, initial_count: u64, halflife_seconds: Option<f64>) -> Self {
         Self {
-            alpha: reward + 1.0,
-            beta: (count as f64) - reward + 1.0,
-            count,
-            discount_factor,
+            alpha: 1.0 + initial_reward,
+            beta: 1.0 + (initial_count as f64) - initial_reward,
+            count: initial_count,
+            halflife_seconds,
             last_ts: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
-                .as_millis(),
+                .as_secs_f64(),
             is_active: true,
         }
     }
 
-    fn apply_discount(&mut self, timestamp: u128) {
-        let dt = (timestamp - self.last_ts) as f64;
-        if dt != 0.0 {
-            let discount = (self.discount_factor.ln() * dt).exp();
-            self.alpha *= discount;
-            self.beta *= discount;
+    // apply an exponential decay d = exp(dt * ln2 / h)
+    fn decay_weight(&self, timestamp: f64) -> f64 {
+        if let Some(h) = self.halflife_seconds {
+            let dt = timestamp - self.last_ts;
+            (-dt * std::f64::consts::LN_2 / h).exp()
+        } else {
+            1.0
         }
+    }
 
+    fn apply_discount(&mut self, timestamp: f64) {
+        let decay = self.decay_weight(timestamp);
+        println!("{:?}", decay);
+
+        self.alpha = (self.alpha * decay).max(EPS);
+        self.beta = (self.beta * decay).max(EPS);
         self.last_ts = timestamp;
     }
 }
 
 impl Arm for ThomsonSamplingArm {
-    fn reset(&mut self, reward: Option<f64>, count: Option<u64>) {
-        if let (Some(reward), Some(count)) = (reward, count) {
-            self.alpha = reward + 1.0;
-            self.beta = (count as f64) - reward + 1.0;
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Result<f64, PolicyError> {
+        let s = Beta::new(self.alpha, self.beta)
+            .map_err(|e| PolicyError::SamplingError(e.to_string()))?
+            .sample(rng);
+
+        Ok(s)
+    }
+
+    fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
+        if let (Some(cumulative_reward), Some(count)) = (cumulative_reward, count) {
+            self.alpha = cumulative_reward + 1.0;
+            self.beta = (count as f64) - cumulative_reward + 1.0;
             self.count = count;
         } else {
             self.alpha = 1.0;
@@ -61,10 +80,10 @@ impl Arm for ThomsonSamplingArm {
         self.last_ts = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis();
+            .as_secs_f64();
     }
 
-    fn update(&mut self, reward: f64, timestamp: u128) {
+    fn update(&mut self, reward: f64, timestamp: f64) {
         self.apply_discount(timestamp);
 
         // update alpha and beta
@@ -84,15 +103,16 @@ impl Arm for ThomsonSamplingArm {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ThomsonSampling {
-    discount_factor: f64,
+    halflife_seconds: Option<f64>,
     arms: HashMap<usize, ThomsonSamplingArm>,
     rng: MaybeSeededRng,
 }
 
 impl ThomsonSampling {
-    pub fn new(discount_factor: Option<f64>, seed: Option<u64>) -> Self {
+    // Decayed Thomson Sampling using halflife, after which past evidence is halved
+    pub fn new(halflife_seconds: Option<f64>, seed: Option<u64>) -> Self {
         Self {
-            discount_factor: discount_factor.unwrap_or(1.0),
+            halflife_seconds,
             arms: HashMap::new(),
             rng: MaybeSeededRng::new(seed),
         }
@@ -110,13 +130,13 @@ impl Policy for ThomsonSampling {
     fn reset(
         &mut self,
         arm_id: Option<usize>,
-        reward: Option<f64>,
+        cumulative_reward: Option<f64>,
         count: Option<u64>,
     ) -> Result<(), PolicyError> {
         if let Some(arm_id) = arm_id {
             self.arms
                 .get_mut(&arm_id)
-                .map(|arm| arm.reset(reward, count))
+                .map(|arm| arm.reset(cumulative_reward, count))
                 .ok_or(PolicyError::ArmNotFound(arm_id))?;
         } else {
             self.arms.values_mut().for_each(|arm| arm.reset(None, None));
@@ -128,7 +148,7 @@ impl Policy for ThomsonSampling {
         let arm_id = self.arms.len();
         self.arms.insert(
             arm_id,
-            ThomsonSamplingArm::new(initial_reward, initial_count, self.discount_factor),
+            ThomsonSamplingArm::new(initial_reward, initial_count, self.halflife_seconds),
         );
 
         arm_id
@@ -145,32 +165,30 @@ impl Policy for ThomsonSampling {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis();
+            .as_secs_f64();
 
         // apply discount to all arms
         self.arms
             .values_mut()
+            .filter(|arm| arm.is_active)
             .for_each(|arm| arm.apply_discount(timestamp));
 
         // sample from the beta distribution for each arm and select the arm with the best statistic
         let arm_id = self
             .arms
             .iter()
-            .filter(|(_, arm)| arm.is_active)
-            .flat_map(|(&arm_id, arm)| {
-                let sample = Beta::new(arm.alpha, arm.beta)
-                    .map_err(|_| PolicyError::SamplingError(arm_id))?
-                    .sample(&mut self.rng.get_rng());
-                Ok::<(usize, f64), PolicyError>((arm_id, sample))
+            .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
+                Ok(sample) => Some((arm_id, sample)),
+                Err(_) => None,
             })
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
-            .map(|(arm_id, _)| arm_id)
+            .map(|(&arm_id, _)| arm_id)
             .ok_or(PolicyError::NoArmsAvailable)?;
 
         Ok(DrawResult { timestamp, arm_id })
     }
 
-    fn update(&mut self, timestamp: u128, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
+    fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
         // update the arm statistics
         self.arms
             .get_mut(&arm_id)
@@ -256,7 +274,8 @@ mod tests {
             timestamp, arm_id, ..
         } = policy.draw().unwrap();
 
-        assert!(policy.update(timestamp + 1, arm_id, 1.0).is_ok());
+        assert!(policy.update(timestamp + 1.0, arm_id, 1.0).is_ok());
+        println!("{:?}", policy.arms);
         assert_eq!(policy.arms.get(&arm_id).map(|arm| arm.alpha), Some(2.0));
         assert_eq!(policy.arms.get(&arm_id).map(|arm| arm.beta), Some(1.0));
     }
@@ -272,9 +291,54 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1, draw.arm_id, 1.0))
-            .collect::<Vec<(u128, usize, f64)>>();
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
 
         assert!(policy.update_batch(&updates).is_ok());
+    }
+
+    #[test]
+    fn no_discount() {
+        let mut arm = ThomsonSamplingArm {
+            alpha: 1.0,
+            beta: 1.0,
+            count: 0,
+            halflife_seconds: None,
+            last_ts: 0.0,
+            is_active: true,
+        };
+        arm.apply_discount(1.0); // dt = 1s
+        assert!((arm.alpha - 1.0).abs() < EPS);
+        assert!((arm.beta - 1.0).abs() < EPS);
+    }
+
+    #[test]
+    fn no_time_discount() {
+        let mut arm = ThomsonSamplingArm {
+            alpha: 1.0,
+            beta: 1.0,
+            count: 0,
+            halflife_seconds: Some(60.0),
+            last_ts: 0.0,
+            is_active: true,
+        };
+        arm.apply_discount(0.0); // dt = 0s
+        assert!((arm.alpha - 1.0).abs() < EPS);
+        assert!((arm.beta - 1.0).abs() < EPS);
+    }
+
+    #[test]
+    fn discount() {
+        let mut arm = ThomsonSamplingArm {
+            alpha: 1.0,
+            beta: 1.0,
+            count: 0,
+            halflife_seconds: Some(60.0),
+            last_ts: 0.0,
+            is_active: true,
+        };
+        arm.apply_discount(60.0); // dt = 60s
+        assert!((arm.alpha - 0.5).abs() < EPS);
+        assert!((arm.beta - 0.5).abs() < EPS);
     }
 }

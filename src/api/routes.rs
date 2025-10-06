@@ -101,11 +101,14 @@ async fn reset_arm(
     let experiment_id =
         Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let arm_id = arm_id.into_inner();
-    let ResetArmPayload { reward, count } = payload.into_inner();
+    let ResetArmPayload {
+        cumulative_reward,
+        count,
+    } = payload.into_inner();
     let response = repository
         .read()
         .await
-        .reset_experiment(experiment_id, Some(arm_id), reward, count)
+        .reset_experiment(experiment_id, Some(arm_id), cumulative_reward, count)
         .await
         .map(|_| HttpResponse::Ok())
         .map_err(ApiResponseError::ErrorBadRequest)?;

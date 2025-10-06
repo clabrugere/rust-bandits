@@ -1,8 +1,12 @@
+use rand::Rng;
 use serde::Serialize;
 
+use crate::policies::errors::PolicyError;
+
 pub trait Arm {
-    fn reset(&mut self, reward: Option<f64>, count: Option<u64>);
-    fn update(&mut self, reward: f64, timestamp: u128);
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Result<f64, PolicyError>;
+    fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>);
+    fn update(&mut self, reward: f64, timestamp: f64);
     fn stats(&self) -> ArmStats;
 }
 

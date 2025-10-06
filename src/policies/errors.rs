@@ -9,6 +9,6 @@ pub enum PolicyError {
     ArmNotFound(usize),
     #[error("Draw {0} for arm {1} not found")]
     DrawNotFound(Uuid, usize),
-    #[error("Sampling error for arm {0}")]
-    SamplingError(usize),
+    #[error("Sampling error: {0}")]
+    SamplingError(String),
 }

@@ -59,7 +59,7 @@ pub struct Ping;
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct Reset {
     pub arm_id: Option<usize>,
-    pub reward: Option<f64>,
+    pub cumulative_reward: Option<f64>,
     pub count: Option<u64>,
 }
 
@@ -83,7 +83,7 @@ pub struct Draw;
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct Update {
-    pub timestamp: u128,
+    pub timestamp: f64,
     pub arm_id: usize,
     pub reward: f64,
 }
@@ -109,7 +109,7 @@ impl Handler<Reset> for Experiment {
 
     fn handle(&mut self, msg: Reset, _: &mut Self::Context) -> Self::Result {
         self.policy
-            .reset(msg.arm_id, msg.reward, msg.count)
+            .reset(msg.arm_id, msg.cumulative_reward, msg.count)
             .map_err(ExperimentOrPolicyError::from)
     }
 }
@@ -158,7 +158,7 @@ impl Handler<UpdateBatch> for Experiment {
 
     fn handle(&mut self, msg: UpdateBatch, _: &mut Self::Context) -> Self::Result {
         let mut updates = msg.updates;
-        updates.sort_unstable_by_key(|a| a.0);
+        updates.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
 
         self.policy
             .update_batch(&updates)

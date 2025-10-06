@@ -120,14 +120,14 @@ impl Repository {
         &self,
         experiment_id: Uuid,
         arm_id: Option<usize>,
-        reward: Option<f64>,
+        cumulative_reward: Option<f64>,
         count: Option<u64>,
     ) -> Result<(), RepositoryOrExperimentError> {
         self.send_to_experiment(
             experiment_id,
             Reset {
                 arm_id,
-                reward,
+                cumulative_reward,
                 count,
             },
         )
@@ -173,7 +173,7 @@ impl Repository {
     pub async fn update_experiment(
         &self,
         experiment_id: Uuid,
-        timestamp: u128,
+        timestamp: f64,
         arm_id: usize,
         reward: f64,
     ) -> Result<(), RepositoryOrExperimentError> {

@@ -85,7 +85,7 @@ pub struct AddExperimentArmResponse {
 
 #[derive(Debug, Serialize)]
 pub struct DrawResponse {
-    pub timestamp: u128,
+    pub timestamp: f64,
     pub arm_id: usize,
 }
 
