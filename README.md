@@ -87,13 +87,12 @@ The system currently exposes 12 routes:
 - [ ] Create routes to disable/enable variants and experiments
 - [ ] Improve cache persistence to allow for some historization
 - [ ] Implement metrics collection system to monitor the service
-- [ ] Provide authentication using JWT
 
 **Policies**
 - [ ] Optional epsilon decay (VDBE)
-- [ ] UCB and its variants
-- [ ] Thomson Sampling for binary rewards
-- [ ] Decayed rewards to non stationary environments
+- [x] UCB
+- [x] Thomson Sampling for binary rewards (Beta prior)
+- [ ] Decayed rewards for non stationary environments
 - [ ] Contextual bandits
 
 **UX**

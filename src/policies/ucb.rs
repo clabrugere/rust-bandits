@@ -4,19 +4,19 @@ use super::policy::{
 };
 use super::rng::MaybeSeededRng;
 
-use rand::{seq::IteratorRandom, Rng};
+use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpsilonGreedyArm {
+pub struct UcbArm {
     reward: f64,
     count: u64,
     is_active: bool,
 }
 
-impl EpsilonGreedyArm {
+impl UcbArm {
     fn new(initial_reward: f64, initial_count: u64) -> Self {
         Self {
             reward: initial_reward,
@@ -25,13 +25,12 @@ impl EpsilonGreedyArm {
         }
     }
 
+    fn sample(&self, alpha: f64, total_count: u64) -> Result<f64, PolicyError> {
+        Ok(self.reward + (alpha * (total_count as f64).ln() / (2.0 * (self.count as f64))))
+    }
     fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
         self.reward = cumulative_reward.unwrap_or_default();
         self.count = count.unwrap_or_default();
-    }
-
-    fn sample<R: Rng + ?Sized>(&self, _: &mut R) -> Result<f64, PolicyError> {
-        Ok(self.reward)
     }
 
     fn update(&mut self, reward: f64, _: f64) {
@@ -49,30 +48,30 @@ impl EpsilonGreedyArm {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpsilonGreedy {
-    arms: HashMap<usize, EpsilonGreedyArm>,
-    epsilon: f64,
+pub struct Ucb {
+    arms: HashMap<usize, UcbArm>,
+    alpha: f64,
     rng: MaybeSeededRng,
 }
 
-impl EpsilonGreedy {
-    pub fn new(epsilon: f64, seed: Option<u64>) -> Self {
+impl Ucb {
+    pub fn new(alpha: f64, seed: Option<u64>) -> Self {
         Self {
             arms: HashMap::new(),
-            epsilon,
+            alpha,
             rng: MaybeSeededRng::new(seed),
         }
     }
 }
 
-impl CloneBoxedPolicy for EpsilonGreedy {
+impl CloneBoxedPolicy for Ucb {
     fn clone_box(&self) -> Box<dyn Policy + Send> {
         Box::new(self.clone())
     }
 }
 
 #[typetag::serde]
-impl Policy for EpsilonGreedy {
+impl Policy for Ucb {
     fn reset(
         &mut self,
         arm_id: Option<usize>,
@@ -93,7 +92,7 @@ impl Policy for EpsilonGreedy {
     fn add_arm(&mut self, cumulative_reward: f64, count: u64) -> usize {
         let arm_id = self.arms.len();
         self.arms
-            .insert(arm_id, EpsilonGreedyArm::new(cumulative_reward, count));
+            .insert(arm_id, UcbArm::new(cumulative_reward, count));
 
         arm_id
     }
@@ -108,19 +107,21 @@ impl Policy for EpsilonGreedy {
     fn draw(&mut self) -> Result<DrawResult, PolicyError> {
         let timestamp = get_timestamp();
 
-        // either sample a random arm or return the one with the highest reward so far
-        let arm_id = if self.rng.get_rng().random::<f64>() < self.epsilon {
-            self.arms
-                .iter()
-                .filter(|(_, arm)| arm.is_active)
-                .map(|(&arm_id, _)| arm_id)
-                .choose(&mut self.rng.get_rng())
-                .ok_or(PolicyError::NoArmsAvailable)
+        // sample random arms while no feedback has been observed for every one, and then the one with the best statistic
+        let arm_id = if let Some(arm_id) = self
+            .arms
+            .iter()
+            .filter(|(_, arm)| arm.is_active && (arm.count == 0))
+            .map(|(&arm_id, _)| arm_id)
+            .choose(&mut self.rng.get_rng())
+        {
+            Ok(arm_id)
         } else {
+            let total_count = self.arms.values().map(|arm| arm.count).sum::<u64>();
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
-                .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
+                .filter_map(|(arm_id, arm)| match arm.sample(self.alpha, total_count) {
                     Ok(sample) => Some((arm_id, sample)),
                     Err(_) => None,
                 })
@@ -167,7 +168,7 @@ mod tests {
 
     #[test]
     fn create_arm() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         assert!(policy.arms.len() == 0);
 
         let arm_id = policy.add_arm(0.0, 0);
@@ -176,7 +177,7 @@ mod tests {
 
     #[test]
     fn delete_arm() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
@@ -185,7 +186,7 @@ mod tests {
 
     #[test]
     fn draw() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_id));
@@ -193,24 +194,32 @@ mod tests {
 
     #[test]
     fn draw_best() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         let arm_1 = policy.add_arm(0.0, 0);
-        let _ = policy.add_arm(0.0, 0);
+        let arm_2 = policy.add_arm(0.0, 0);
 
-        policy.arms.get_mut(&arm_1).map(|arm| arm.reward = 1.0);
+        policy.arms.get_mut(&arm_1).map(|arm| {
+            arm.reward = 1.0;
+            arm.count += 1
+        });
+        policy.arms.get_mut(&arm_2).map(|arm| {
+            arm.reward = 0.0;
+            arm.count += 1
+        });
+
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_1));
     }
 
     #[test]
     fn draw_empty() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         assert!(policy.draw().is_err());
     }
 
     #[test]
     fn update() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -224,7 +233,7 @@ mod tests {
 
     #[test]
     fn update_batch() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = Ucb::new(1.0, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 

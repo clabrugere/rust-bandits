@@ -1,6 +1,7 @@
-use super::arm::{Arm, ArmStats};
 use super::errors::PolicyError;
-use super::policy::{BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats};
+use super::policy::{
+    get_timestamp, ArmStats, BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats,
+};
 use super::rng::MaybeSeededRng;
 
 use rand::Rng;
@@ -9,7 +10,6 @@ use rand_distr::Distribution;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 const EPS: f64 = 1e-6;
 
@@ -30,12 +30,22 @@ impl ThomsonSamplingArm {
             beta: 1.0 + (initial_count as f64) - initial_reward,
             count: initial_count,
             halflife_seconds,
-            last_ts: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs_f64(),
+            last_ts: get_timestamp(),
             is_active: true,
         }
+    }
+
+    fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
+        if let (Some(cumulative_reward), Some(count)) = (cumulative_reward, count) {
+            self.alpha = cumulative_reward + 1.0;
+            self.beta = (count as f64) - cumulative_reward + 1.0;
+            self.count = count;
+        } else {
+            self.alpha = 1.0;
+            self.beta = 1.0;
+            self.count = 0;
+        }
+        self.last_ts = get_timestamp();
     }
 
     // apply an exponential decay d = exp(dt * ln2 / h)
@@ -56,31 +66,13 @@ impl ThomsonSamplingArm {
         self.beta = (self.beta * decay).max(EPS);
         self.last_ts = timestamp;
     }
-}
 
-impl Arm for ThomsonSamplingArm {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Result<f64, PolicyError> {
         let s = Beta::new(self.alpha, self.beta)
             .map_err(|e| PolicyError::SamplingError(e.to_string()))?
             .sample(rng);
 
         Ok(s)
-    }
-
-    fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
-        if let (Some(cumulative_reward), Some(count)) = (cumulative_reward, count) {
-            self.alpha = cumulative_reward + 1.0;
-            self.beta = (count as f64) - cumulative_reward + 1.0;
-            self.count = count;
-        } else {
-            self.alpha = 1.0;
-            self.beta = 1.0;
-            self.count = 0;
-        }
-        self.last_ts = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
     }
 
     fn update(&mut self, reward: f64, timestamp: f64) {
@@ -162,10 +154,7 @@ impl Policy for ThomsonSampling {
     }
 
     fn draw(&mut self) -> Result<DrawResult, PolicyError> {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs_f64();
+        let timestamp = get_timestamp();
 
         // apply discount to all arms
         self.arms
@@ -177,6 +166,7 @@ impl Policy for ThomsonSampling {
         let arm_id = self
             .arms
             .iter()
+            .filter(|(_, arm)| arm.is_active)
             .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
                 Ok(sample) => Some((arm_id, sample)),
                 Err(_) => None,
