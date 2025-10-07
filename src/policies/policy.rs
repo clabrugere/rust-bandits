@@ -1,3 +1,5 @@
+use crate::policies::epsilon_greedy::DecayType;
+
 use super::epsilon_greedy::EpsilonGreedy;
 use super::errors::PolicyError;
 use super::thomson_sampling::ThomsonSampling;
@@ -33,6 +35,7 @@ pub struct PolicyStats {
 pub enum PolicyType {
     EpsilonGreedy {
         epsilon: f64,
+        epsilon_decay: DecayType,
         seed: Option<u64>,
     },
     ThomsonSampling {
@@ -48,9 +51,11 @@ pub enum PolicyType {
 impl PolicyType {
     pub fn into_inner(self) -> Box<dyn Policy + Send> {
         match self {
-            PolicyType::EpsilonGreedy { epsilon, seed } => {
-                Box::new(EpsilonGreedy::new(epsilon, seed))
-            }
+            PolicyType::EpsilonGreedy {
+                epsilon,
+                epsilon_decay,
+                seed,
+            } => Box::new(EpsilonGreedy::new(epsilon, epsilon_decay, seed)),
             PolicyType::ThomsonSampling {
                 discount_factor,
                 seed,

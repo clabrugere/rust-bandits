@@ -82,14 +82,14 @@ The system currently exposes 12 routes:
 ## Roadmap
 
 **Core**
-- [ ] Finish implementing the restart of unresponsive experiments
+- [ ] Implement the restart of unresponsive experiments
 - [ ] Implement storage for logs and its interactions with the accountant actor
 - [ ] Create routes to disable/enable variants and experiments
 - [ ] Improve cache persistence to allow for some historization
 - [ ] Implement metrics collection system to monitor the service
 
 **Policies**
-- [ ] Optional epsilon decay (VDBE)
+- [x] Optional epsilon decay
 - [x] UCB
 - [x] Thomson Sampling for binary rewards (Beta prior)
 - [ ] Decayed rewards for non stationary environments

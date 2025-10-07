@@ -62,6 +62,14 @@ impl Ucb {
             rng: MaybeSeededRng::new(seed),
         }
     }
+
+    fn total_count(&self) -> u64 {
+        self.arms
+            .values()
+            .filter(|arm| arm.is_active)
+            .map(|arm| arm.count)
+            .sum::<u64>()
+    }
 }
 
 impl CloneBoxedPolicy for Ucb {
@@ -117,14 +125,15 @@ impl Policy for Ucb {
         {
             Ok(arm_id)
         } else {
-            let total_count = self.arms.values().map(|arm| arm.count).sum::<u64>();
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
-                .filter_map(|(arm_id, arm)| match arm.sample(self.alpha, total_count) {
-                    Ok(sample) => Some((arm_id, sample)),
-                    Err(_) => None,
-                })
+                .filter_map(
+                    |(arm_id, arm)| match arm.sample(self.alpha, self.total_count()) {
+                        Ok(sample) => Some((arm_id, sample)),
+                        Err(_) => None,
+                    },
+                )
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                 .map(|(&arm_id, _)| arm_id)
                 .ok_or(PolicyError::NoArmsAvailable)
