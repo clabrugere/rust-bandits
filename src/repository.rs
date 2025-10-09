@@ -1,5 +1,5 @@
 use super::actors::experiment::Experiment;
-use super::actors::state_store::{ReadFullExperimentState, StateStore};
+use super::actors::state_store::{LoadAllStates, StateStore};
 use super::errors::{RepositoryError, RepositoryOrExperimentError};
 
 use crate::actors::experiment::{
@@ -8,7 +8,7 @@ use crate::actors::experiment::{
 use crate::config::ExperimentConfig;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats, PolicyType};
 
-use actix::prelude::*;
+use actix::{prelude::*, Supervisor};
 use std::collections::HashMap;
 use tracing::info;
 use uuid::Uuid;
@@ -35,7 +35,7 @@ impl Repository {
 
     pub async fn load_experiments(&mut self) -> Result<(), RepositoryError> {
         self.state_store
-            .send(ReadFullExperimentState)
+            .send(LoadAllStates)
             .await
             .map(|experiments| {
                 info!(num_experiments = %experiments.len(), "Loaded experiments");
@@ -108,13 +108,14 @@ impl Repository {
     ) -> Uuid {
         let experiment_id = experiment_id.unwrap_or(Uuid::new_v4());
         let policy_type = policy.policy_type();
-        let address = Experiment::new(
-            experiment_id,
-            policy,
-            self.state_store.clone(),
-            self.experiment_config.save_every,
-        )
-        .start();
+        // use a Supervisor to handle auto restart of crashed experiments
+        let address = Supervisor::start({
+            let state_store = self.state_store.clone();
+            let save_every = self.experiment_config.save_every;
+
+            move |_| Experiment::new(experiment_id, Some(policy), state_store.clone(), save_every)
+        });
+
         self.experiments.insert(
             experiment_id,
             RepositoryElement {
@@ -167,7 +168,8 @@ impl Repository {
                 initial_count,
             },
         )
-        .await
+        .await?
+        .map_err(RepositoryOrExperimentError::from)
     }
 
     pub async fn enable_experiment_arm(
@@ -242,6 +244,8 @@ impl Repository {
         &self,
         experiment_id: Uuid,
     ) -> Result<PolicyStats, RepositoryOrExperimentError> {
-        self.send_to_experiment(experiment_id, GetStats).await
+        self.send_to_experiment(experiment_id, GetStats)
+            .await?
+            .map_err(RepositoryOrExperimentError::from)
     }
 }

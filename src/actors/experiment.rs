@@ -1,6 +1,8 @@
-use super::state_store::{InsertExperimentState, StateStore};
+use super::state_store::{SaveState, StateStore};
 
+use crate::actors::state_store::LoadState;
 use crate::errors::ExperimentOrPolicyError;
+use crate::policies::errors::PolicyError;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
 
 use actix::prelude::*;
@@ -10,7 +12,7 @@ use uuid::Uuid;
 
 pub struct Experiment {
     id: Uuid,
-    policy: Box<dyn Policy + Send>,
+    policy: Option<Box<dyn Policy + Send>>,
     state_store: Addr<StateStore>,
     save_every: u64,
 }
@@ -18,7 +20,7 @@ pub struct Experiment {
 impl Experiment {
     pub fn new(
         id: Uuid,
-        policy: Box<dyn Policy + Send>,
+        policy: Option<Box<dyn Policy + Send>>,
         state_store: Addr<StateStore>,
         save_every: u64,
     ) -> Self {
@@ -31,11 +33,26 @@ impl Experiment {
     }
 
     fn persist(&self) {
-        info!(id = %self.id, "Persisting policy state for experiment");
-        self.state_store.do_send(InsertExperimentState {
-            experiment_id: self.id,
-            policy: self.policy.clone_box(),
-        });
+        if let Some(policy) = &self.policy {
+            info!(id = %self.id, "Persisting policy state for experiment");
+            self.state_store.do_send(SaveState {
+                experiment_id: self.id,
+                policy: policy.clone_box(),
+            });
+        }
+    }
+
+    fn with_policy_mut<F, R, E>(&mut self, f: F) -> Result<R, ExperimentOrPolicyError>
+    where
+        F: FnOnce(&mut dyn Policy) -> Result<R, E>,
+        ExperimentOrPolicyError: From<E>,
+    {
+        let policy = self
+            .policy
+            .as_mut()
+            .ok_or(ExperimentOrPolicyError::NoPolicy)?;
+
+        f(policy.as_mut()).map_err(Into::into)
     }
 }
 
@@ -44,11 +61,39 @@ impl Actor for Experiment {
 
     fn started(&mut self, ctx: &mut Self::Context) {
         info!(id = %self.id, "Starting actor for experiment");
+
+        if self.policy.is_none() {
+            let experiment_id = self.id;
+            let state_store = self.state_store.clone();
+
+            ctx.spawn(
+                async move {
+                    match state_store.clone().send(LoadState { experiment_id }).await {
+                        Ok(Some(policy)) => Some(policy),
+                        _ => None,
+                    }
+                }
+                .into_actor(self)
+                .map(|maybe_policy, actor, _| {
+                    if let Some(policy) = maybe_policy {
+                        actor.policy = Some(policy);
+                        info!(id = %actor.id, "Reloaded policy state for experiment");
+                    }
+                }),
+            );
+        }
+
         ctx.run_interval(Duration::from_secs(self.save_every), |experiment, _| {
             experiment.persist();
         });
     }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        info!(id = %self.id, "Stopped actor for experiment");
+    }
 }
+
+impl Supervised for Experiment {}
 
 // Messages
 #[derive(Message)]
@@ -64,7 +109,7 @@ pub struct Reset {
 }
 
 #[derive(Message)]
-#[rtype(result = "usize")]
+#[rtype(result = "Result<usize, ExperimentOrPolicyError>")]
 pub struct AddArm {
     pub initial_reward: Option<f64>,
     pub initial_count: Option<u64>,
@@ -107,7 +152,7 @@ pub struct UpdateBatch {
 }
 
 #[derive(Message)]
-#[rtype(result = "PolicyStats")]
+#[rtype(result = "Result<PolicyStats, ExperimentOrPolicyError>")]
 pub struct GetStats;
 
 // Handlers
@@ -121,20 +166,21 @@ impl Handler<Reset> for Experiment {
     type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: Reset, _: &mut Self::Context) -> Self::Result {
-        self.policy
-            .reset(msg.arm_id, msg.cumulative_reward, msg.count)
-            .map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.reset(msg.arm_id, msg.cumulative_reward, msg.count))
     }
 }
 
 impl Handler<AddArm> for Experiment {
-    type Result = usize;
+    type Result = Result<usize, ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: AddArm, _: &mut Self::Context) -> Self::Result {
-        self.policy.add_arm(
-            msg.initial_reward.unwrap_or_default(),
-            msg.initial_count.unwrap_or_default(),
-        )
+        self.with_policy_mut(|policy| {
+            let arm_id = policy.add_arm(
+                msg.initial_reward.unwrap_or_default(),
+                msg.initial_count.unwrap_or_default(),
+            );
+            Ok::<usize, PolicyError>(arm_id)
+        })
     }
 }
 
@@ -142,9 +188,7 @@ impl Handler<DisableArm> for Experiment {
     type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: DisableArm, _: &mut Self::Context) -> Self::Result {
-        self.policy
-            .disable_arm(msg.arm_id)
-            .map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.disable_arm(msg.arm_id))
     }
 }
 
@@ -152,9 +196,7 @@ impl Handler<EnableArm> for Experiment {
     type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: EnableArm, _: &mut Self::Context) -> Self::Result {
-        self.policy
-            .enable_arm(msg.arm_id)
-            .map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.enable_arm(msg.arm_id))
     }
 }
 
@@ -162,9 +204,7 @@ impl Handler<DeleteArm> for Experiment {
     type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: DeleteArm, _: &mut Self::Context) -> Self::Result {
-        self.policy
-            .delete_arm(msg.arm_id)
-            .map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.delete_arm(msg.arm_id))
     }
 }
 
@@ -172,7 +212,7 @@ impl Handler<Draw> for Experiment {
     type Result = Result<DrawResult, ExperimentOrPolicyError>;
 
     fn handle(&mut self, _: Draw, _: &mut Self::Context) -> Self::Result {
-        self.policy.draw().map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.draw())
     }
 }
 
@@ -180,9 +220,7 @@ impl Handler<Update> for Experiment {
     type Result = Result<(), ExperimentOrPolicyError>;
 
     fn handle(&mut self, msg: Update, _: &mut Self::Context) -> Self::Result {
-        self.policy
-            .update(msg.timestamp, msg.arm_id, msg.reward)
-            .map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.update(msg.timestamp, msg.arm_id, msg.reward))
     }
 }
 
@@ -193,16 +231,14 @@ impl Handler<UpdateBatch> for Experiment {
         let mut updates = msg.updates;
         updates.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
 
-        self.policy
-            .update_batch(&updates)
-            .map_err(ExperimentOrPolicyError::from)
+        self.with_policy_mut(|policy| policy.update_batch(&updates))
     }
 }
 
 impl Handler<GetStats> for Experiment {
-    type Result = MessageResult<GetStats>;
+    type Result = Result<PolicyStats, ExperimentOrPolicyError>;
 
     fn handle(&mut self, _: GetStats, _: &mut Self::Context) -> Self::Result {
-        MessageResult(self.policy.stats())
+        self.with_policy_mut(|policy| Ok::<PolicyStats, PolicyError>(policy.stats()))
     }
 }

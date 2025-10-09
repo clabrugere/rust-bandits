@@ -48,6 +48,7 @@ async fn main() -> Result<(), Error> {
         state_store.clone(),
     )));
 
+    // Reload all existing policies
     match repository.write().await.load_experiments().await {
         Ok(_) => (),
         Err(err) => {

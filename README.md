@@ -16,11 +16,13 @@ The HTTP server is implemented using [actix-web](https://actix.rs/) framework an
 
 In this paradigm, an actor is an independent entity that manages its own state and interacts with its environment - such as other actors - using asynchronous message passing only. Messages received are enqueued and processed sequentially within an actor, avoiding the complexities of lock mechanisms.
 
-In our system, the HTTP server interacts with a **Repository** that is responsible for managing the different experiments. It is not an actor to avoid contention. Instead, it stores a hashmap of experiment addresses, wrapped in a RwLock for concurrent reads and blocking writes. We assume the system will be used to access individual actors through message passing (so repository reads), and more rarely addition/deletion of experiments (repository writes).
+In our system, the HTTP server interacts with a **Repository** that is responsible for managing the different experiments. It is not an actor to avoid contention but instead uses a hashmap of experiment addresses, wrapped in a RwLock for concurrent reads and blocking writes. When starting, it will load states of existing policies. We assume the system will be used to access individual actors through message passing (so repository reads), and more rarely addition/deletion of experiments (repository writes).
 
 Each experiment is an actor implementing some policy, handling the optimization. The repository either creates or deletes experiments, or simply dispatch a message to a running experiment. This allows to have low coupling between experiments and to process requests for different experiments in a non blocking way. 
 
 Individual experiments periodically send their state to a **StateStore** actor, that is also persisted to disk for recovery in case of an application crash.
+
+Upon panic, experiments restart is managed by Actix-web **Supervisor**, with a custom logic in `started` method of **Experiment** actor allowing to reload the last known state.
 
 Finally, every request along with the response is processed by a middleware and sent to an **Accountant** actor, responsible for tracking. It interacts with some storage to persist logs (such as a relational database) while not blocking the rest of the application.
 
@@ -82,7 +84,7 @@ The system currently exposes 12 routes:
 ## Roadmap
 
 **Core**
-- [ ] Implement the restart of unresponsive experiments
+- [x] Implement the restart of unresponsive experiments
 - [ ] Implement storage for logs and its interactions with the accountant actor
 - [x] Create routes to disable/enable arms
 - [ ] Improve StateStore persistence to allow for some historization

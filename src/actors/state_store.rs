@@ -58,56 +58,56 @@ impl Actor for StateStore {
 // Messages
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct InsertExperimentState {
+pub struct SaveState {
     pub experiment_id: Uuid,
     pub policy: Box<dyn Policy + Send>,
 }
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct RemoveExperimentState {
+pub struct DeleteState {
     pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "Option<Box<dyn Policy + Send>>")]
-pub struct ReadExperimentState {
+pub struct LoadState {
     pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "HashMap<Uuid, Box<dyn Policy + Send>>")]
-pub struct ReadFullExperimentState;
+pub struct LoadAllStates;
 
 // Handlers
-impl Handler<InsertExperimentState> for StateStore {
+impl Handler<SaveState> for StateStore {
     type Result = ();
 
-    fn handle(&mut self, msg: InsertExperimentState, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: SaveState, _: &mut Self::Context) -> Self::Result {
         self.storage.insert(msg.experiment_id, msg.policy);
     }
 }
 
-impl Handler<RemoveExperimentState> for StateStore {
+impl Handler<DeleteState> for StateStore {
     type Result = ();
 
-    fn handle(&mut self, msg: RemoveExperimentState, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: DeleteState, _: &mut Self::Context) -> Self::Result {
         self.storage.remove(&msg.experiment_id);
     }
 }
 
-impl Handler<ReadExperimentState> for StateStore {
+impl Handler<LoadState> for StateStore {
     type Result = Option<Box<dyn Policy + Send>>;
 
-    fn handle(&mut self, msg: ReadExperimentState, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: LoadState, _: &mut Self::Context) -> Self::Result {
         self.storage.get(&msg.experiment_id).cloned()
     }
 }
 
-impl Handler<ReadFullExperimentState> for StateStore {
-    type Result = MessageResult<ReadFullExperimentState>;
+impl Handler<LoadAllStates> for StateStore {
+    type Result = MessageResult<LoadAllStates>;
 
-    fn handle(&mut self, _: ReadFullExperimentState, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: LoadAllStates, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.storage.clone())
     }
 }

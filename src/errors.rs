@@ -32,6 +32,8 @@ pub enum ExperimentOrPolicyError {
     Experiment(#[from] ExperimentError),
     #[error(transparent)]
     PolicyError(#[from] PolicyError),
+    #[error("No policy")]
+    NoPolicy,
 }
 
 #[derive(Debug, Error)]
