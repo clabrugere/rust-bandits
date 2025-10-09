@@ -3,7 +3,8 @@ use super::actors::state_store::{LoadAllStates, StateStore};
 use super::errors::{RepositoryError, RepositoryOrExperimentError};
 
 use crate::actors::experiment::{
-    AddArm, DeleteArm, DisableArm, Draw, EnableArm, GetStats, Ping, Reset, Update, UpdateBatch,
+    AddArm, DeleteArm, DisableArm, Draw, EnableArm, GetStats, Ping, Reset, Stop, Update,
+    UpdateBatch,
 };
 use crate::config::ExperimentConfig;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats, PolicyType};
@@ -127,13 +128,13 @@ impl Repository {
         experiment_id
     }
 
-    pub fn delete_experiment(&mut self, experiment_id: Uuid) -> Result<(), RepositoryError> {
-        if self.experiments.contains_key(&experiment_id) {
-            self.experiments.remove(&experiment_id);
-            Ok(())
-        } else {
-            Err(RepositoryError::ExperimentNotFound(experiment_id))
-        }
+    pub async fn delete_experiment(
+        &mut self,
+        experiment_id: Uuid,
+    ) -> Result<(), RepositoryOrExperimentError> {
+        self.get_experiment_address(experiment_id)?.do_send(Stop);
+        self.experiments.remove(&experiment_id);
+        Ok(())
     }
 
     pub async fn reset_experiment(

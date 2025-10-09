@@ -84,6 +84,7 @@ impl Handler<SaveState> for StateStore {
     type Result = ();
 
     fn handle(&mut self, msg: SaveState, _: &mut Self::Context) -> Self::Result {
+        info!(id = %msg.experiment_id, "Saving state for experiment");
         self.storage.insert(msg.experiment_id, msg.policy);
     }
 }
@@ -92,6 +93,7 @@ impl Handler<DeleteState> for StateStore {
     type Result = ();
 
     fn handle(&mut self, msg: DeleteState, _: &mut Self::Context) -> Self::Result {
+        info!(id = %msg.experiment_id, "Deleting state for experiment");
         self.storage.remove(&msg.experiment_id);
     }
 }

@@ -1,6 +1,6 @@
 use super::state_store::{SaveState, StateStore};
 
-use crate::actors::state_store::LoadState;
+use crate::actors::state_store::{DeleteState, LoadState};
 use crate::errors::ExperimentOrPolicyError;
 use crate::policies::errors::PolicyError;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
@@ -34,7 +34,6 @@ impl Experiment {
 
     fn persist(&self) {
         if let Some(policy) = &self.policy {
-            info!(id = %self.id, "Persisting policy state for experiment");
             self.state_store.do_send(SaveState {
                 experiment_id: self.id,
                 policy: policy.clone_box(),
@@ -89,6 +88,9 @@ impl Actor for Experiment {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
+        self.state_store.do_send(DeleteState {
+            experiment_id: self.id,
+        });
         info!(id = %self.id, "Stopped actor for experiment");
     }
 }
@@ -99,6 +101,10 @@ impl Supervised for Experiment {}
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Ping;
+
+#[derive(Message)]
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
+pub struct Stop;
 
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
@@ -160,6 +166,15 @@ impl Handler<Ping> for Experiment {
     type Result = ();
 
     fn handle(&mut self, _: Ping, _: &mut Self::Context) -> Self::Result {}
+}
+
+impl Handler<Stop> for Experiment {
+    type Result = Result<(), ExperimentOrPolicyError>;
+
+    fn handle(&mut self, _: Stop, ctx: &mut Self::Context) -> Self::Result {
+        ctx.stop();
+        Ok(())
+    }
 }
 
 impl Handler<Reset> for Experiment {

@@ -6,7 +6,6 @@ use super::responses::{
     AddExperimentArmResponse, CreateExperimentResponse, DrawResponse, ListExperimentsResponse,
 };
 use crate::api::requests::ResetArmPayload;
-use crate::errors::RepositoryOrExperimentError;
 use crate::policies::PolicyType;
 use crate::repository::Repository;
 
@@ -122,8 +121,8 @@ async fn delete_experiment(
         .write()
         .await
         .delete_experiment(experiment_id)
+        .await
         .map(|_| HttpResponse::Ok())
-        .map_err(RepositoryOrExperimentError::Repository)
         .map_err(ApiResponseError::ErrorBadRequest)?;
 
     Ok(response)
