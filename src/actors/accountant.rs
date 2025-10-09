@@ -23,12 +23,14 @@ impl Actor for Accountant {
     }
 }
 
+// Messages
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct LogResponse {
     pub response: LoggedResponse,
 }
 
+// Handlers
 impl Handler<LogResponse> for Accountant {
     type Result = ();
 

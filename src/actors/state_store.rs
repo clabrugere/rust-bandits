@@ -55,6 +55,7 @@ impl Actor for StateStore {
     }
 }
 
+// Messages
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct InsertExperimentState {
@@ -78,6 +79,7 @@ pub struct ReadExperimentState {
 #[rtype(result = "HashMap<Uuid, Box<dyn Policy + Send>>")]
 pub struct ReadFullExperimentState;
 
+// Handlers
 impl Handler<InsertExperimentState> for StateStore {
     type Result = ();
 

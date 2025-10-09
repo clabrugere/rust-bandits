@@ -15,7 +15,7 @@ use std::collections::HashMap;
 const EPS: f64 = 1e-6;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ThomsonSamplingArm {
+struct ThomsonSamplingArm {
     alpha: f64,
     beta: f64,
     count: u64,

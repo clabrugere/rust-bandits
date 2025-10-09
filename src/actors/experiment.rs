@@ -110,6 +110,7 @@ pub struct UpdateBatch {
 #[rtype(result = "PolicyStats")]
 pub struct GetStats;
 
+// Handlers
 impl Handler<Ping> for Experiment {
     type Result = ();
 

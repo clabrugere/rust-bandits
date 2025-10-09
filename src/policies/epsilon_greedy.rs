@@ -11,7 +11,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EpsilonGreedyArm {
+struct EpsilonGreedyArm {
     reward: f64,
     count: u64,
     is_active: bool,

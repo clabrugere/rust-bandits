@@ -2,7 +2,7 @@ use rand::{rngs::SmallRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MaybeSeededRng {
+pub(super) struct MaybeSeededRng {
     pub seed: Option<u64>,
     #[serde(skip)]
     #[serde(default = "default_rng")]

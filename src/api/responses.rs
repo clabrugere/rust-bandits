@@ -75,17 +75,17 @@ pub struct ListExperimentsResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct CreateExperimentResponse {
+pub(super) struct CreateExperimentResponse {
     pub experiment_id: Uuid,
 }
 
 #[derive(Debug, Serialize)]
-pub struct AddExperimentArmResponse {
+pub(super) struct AddExperimentArmResponse {
     pub arm_id: usize,
 }
 
 #[derive(Debug, Serialize)]
-pub struct DrawResponse {
+pub(super) struct DrawResponse {
     pub timestamp: f64,
     pub arm_id: usize,
 }

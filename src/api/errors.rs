@@ -4,7 +4,7 @@ use actix_web::{error::ResponseError, http::StatusCode};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ApiResponseError {
+pub(super) enum ApiResponseError {
     #[error("Server Internal Error")]
     InternalError,
     #[error(transparent)]
