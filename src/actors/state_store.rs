@@ -1,18 +1,18 @@
 use crate::errors::PersistenceError;
-use crate::{config::ExperimentCacheConfig, policies::Policy};
+use crate::{config::StateStoreConfig, policies::Policy};
 
 use actix::prelude::*;
 use std::{collections::HashMap, fs::File, io::BufReader, time::Duration};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-pub struct ExperimentCache {
+pub struct StateStore {
     storage: HashMap<Uuid, Box<dyn Policy + Send>>,
-    config: ExperimentCacheConfig,
+    config: StateStoreConfig,
 }
 
-impl ExperimentCache {
-    pub fn new(config: ExperimentCacheConfig) -> Self {
+impl StateStore {
+    pub fn new(config: StateStoreConfig) -> Self {
         let storage = File::open(&config.path)
             .map(|file| {
                 let reader = BufReader::new(file);
@@ -30,7 +30,7 @@ impl ExperimentCache {
 
         info!(
             path = ?self.config.path,
-            "Persisting cache"
+            "Persisting state store to"
         );
 
         let serialized = serde_json::to_string(&self.storage)?;
@@ -39,16 +39,16 @@ impl ExperimentCache {
     }
 }
 
-impl Actor for ExperimentCache {
+impl Actor for StateStore {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Starting experiment cache actor");
+        info!("Starting experiment StateStore actor");
         ctx.run_interval(
             Duration::from_secs(self.config.persist_every),
-            |cache, _| {
-                if let Err(err) = cache.persist() {
-                    warn!(error = %err, "Failed to persist cache");
+            |state_store, _| {
+                if let Err(err) = state_store.persist() {
+                    warn!(error = %err, "Failed to persist state store");
                 }
             },
         );
@@ -57,55 +57,55 @@ impl Actor for ExperimentCache {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct InsertExperimentCache {
+pub struct InsertExperimentState {
     pub experiment_id: Uuid,
     pub policy: Box<dyn Policy + Send>,
 }
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct RemoveExperimentCache {
+pub struct RemoveExperimentState {
     pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "Option<Box<dyn Policy + Send>>")]
-pub struct ReadExperimentCache {
+pub struct ReadExperimentState {
     pub experiment_id: Uuid,
 }
 
 #[derive(Message)]
 #[rtype(result = "HashMap<Uuid, Box<dyn Policy + Send>>")]
-pub struct ReadFullExperimentCache;
+pub struct ReadFullExperimentState;
 
-impl Handler<InsertExperimentCache> for ExperimentCache {
+impl Handler<InsertExperimentState> for StateStore {
     type Result = ();
 
-    fn handle(&mut self, msg: InsertExperimentCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: InsertExperimentState, _: &mut Self::Context) -> Self::Result {
         self.storage.insert(msg.experiment_id, msg.policy);
     }
 }
 
-impl Handler<RemoveExperimentCache> for ExperimentCache {
+impl Handler<RemoveExperimentState> for StateStore {
     type Result = ();
 
-    fn handle(&mut self, msg: RemoveExperimentCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RemoveExperimentState, _: &mut Self::Context) -> Self::Result {
         self.storage.remove(&msg.experiment_id);
     }
 }
 
-impl Handler<ReadExperimentCache> for ExperimentCache {
+impl Handler<ReadExperimentState> for StateStore {
     type Result = Option<Box<dyn Policy + Send>>;
 
-    fn handle(&mut self, msg: ReadExperimentCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: ReadExperimentState, _: &mut Self::Context) -> Self::Result {
         self.storage.get(&msg.experiment_id).cloned()
     }
 }
 
-impl Handler<ReadFullExperimentCache> for ExperimentCache {
-    type Result = MessageResult<ReadFullExperimentCache>;
+impl Handler<ReadFullExperimentState> for StateStore {
+    type Result = MessageResult<ReadFullExperimentState>;
 
-    fn handle(&mut self, _: ReadFullExperimentCache, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: ReadFullExperimentState, _: &mut Self::Context) -> Self::Result {
         MessageResult(self.storage.clone())
     }
 }

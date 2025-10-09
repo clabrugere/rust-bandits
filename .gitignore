@@ -1,6 +1,6 @@
 # Custom targets
 .DS_Store
-cache
+state_store
 roadmap.md
 curl-collection/
 

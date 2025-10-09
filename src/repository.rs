@@ -1,36 +1,41 @@
 use super::actors::experiment::Experiment;
-use super::actors::experiment_cache::{ExperimentCache, ReadFullExperimentCache};
+use super::actors::state_store::{ReadFullExperimentState, StateStore};
 use super::errors::{RepositoryError, RepositoryOrExperimentError};
 
 use crate::actors::experiment::{
     AddArm, DeleteArm, Draw, GetStats, Ping, Reset, Update, UpdateBatch,
 };
 use crate::config::ExperimentConfig;
-use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
+use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats, PolicyType};
 
 use actix::prelude::*;
 use std::collections::HashMap;
 use tracing::info;
 use uuid::Uuid;
 
+struct RepositoryElement {
+    address: Addr<Experiment>,
+    policy_type: PolicyType,
+}
+
 pub struct Repository {
-    experiments: HashMap<Uuid, Addr<Experiment>>,
+    experiments: HashMap<Uuid, RepositoryElement>,
     experiment_config: ExperimentConfig,
-    cache: Addr<ExperimentCache>,
+    state_store: Addr<StateStore>,
 }
 
 impl Repository {
-    pub fn new(experiment_config: ExperimentConfig, cache: Addr<ExperimentCache>) -> Self {
+    pub fn new(experiment_config: ExperimentConfig, state_store: Addr<StateStore>) -> Self {
         Self {
             experiments: HashMap::new(),
             experiment_config,
-            cache,
+            state_store,
         }
     }
 
     pub async fn load_experiments(&mut self) -> Result<(), RepositoryError> {
-        self.cache
-            .send(ReadFullExperimentCache)
+        self.state_store
+            .send(ReadFullExperimentState)
             .await
             .map(|experiments| {
                 info!(num_experiments = %experiments.len(), "Loaded experiments");
@@ -43,15 +48,18 @@ impl Repository {
             .map_err(|err| RepositoryError::StorageError(err.to_string()))
     }
 
-    fn get_experiment(
+    fn get_experiment_address(
         &self,
         experiment_id: Uuid,
     ) -> Result<Addr<Experiment>, RepositoryOrExperimentError> {
-        self.experiments.get(&experiment_id).cloned().ok_or(
-            RepositoryOrExperimentError::Repository(RepositoryError::ExperimentNotFound(
-                experiment_id,
-            )),
-        )
+        // cloning the address of an actor is cheap
+        self.experiments
+            .get(&experiment_id)
+            .map(|e| &e.address)
+            .cloned()
+            .ok_or(RepositoryOrExperimentError::Repository(
+                RepositoryError::ExperimentNotFound(experiment_id),
+            ))
     }
 
     async fn send_to_experiment<M>(
@@ -60,11 +68,11 @@ impl Repository {
         message: M,
     ) -> Result<M::Result, RepositoryOrExperimentError>
     where
-        M: actix::Message + Send + 'static,
+        M: Message + Send + 'static,
         M::Result: Send + 'static,
-        Experiment: actix::Handler<M>,
+        Experiment: Handler<M>,
     {
-        self.get_experiment(experiment_id)?
+        self.get_experiment_address(experiment_id)?
             .send(message)
             .await
             .map_err(|_| {
@@ -81,8 +89,12 @@ impl Repository {
         self.send_to_experiment(experiment_id, Ping).await
     }
 
-    pub fn list_experiments(&self) -> Result<Vec<Uuid>, RepositoryError> {
-        Ok(self.experiments.keys().cloned().collect())
+    pub fn list_experiments(&self) -> Result<HashMap<Uuid, PolicyType>, RepositoryError> {
+        Ok(self
+            .experiments
+            .iter()
+            .map(|(&id, el)| (id, el.policy_type.clone()))
+            .collect())
     }
 
     pub fn clear(&mut self) {
@@ -95,14 +107,21 @@ impl Repository {
         policy: Box<dyn Policy + Send>,
     ) -> Uuid {
         let experiment_id = experiment_id.unwrap_or(Uuid::new_v4());
-        let actor_addr = Experiment::new(
+        let policy_type = policy.policy_type();
+        let address = Experiment::new(
             experiment_id,
             policy,
-            self.cache.clone(),
+            self.state_store.clone(),
             self.experiment_config.save_every,
         )
         .start();
-        self.experiments.insert(experiment_id, actor_addr);
+        self.experiments.insert(
+            experiment_id,
+            RepositoryElement {
+                address,
+                policy_type,
+            },
+        );
 
         experiment_id
     }

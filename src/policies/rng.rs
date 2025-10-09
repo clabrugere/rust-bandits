@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MaybeSeededRng {
-    seed: Option<u64>,
+    pub seed: Option<u64>,
     #[serde(skip)]
     #[serde(default = "default_rng")]
     rng: SmallRng,

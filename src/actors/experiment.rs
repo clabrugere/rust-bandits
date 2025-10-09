@@ -1,4 +1,4 @@
-use super::experiment_cache::{ExperimentCache, InsertExperimentCache};
+use super::state_store::{InsertExperimentState, StateStore};
 
 use crate::errors::ExperimentOrPolicyError;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 pub struct Experiment {
     id: Uuid,
     policy: Box<dyn Policy + Send>,
-    cache: Addr<ExperimentCache>,
+    state_store: Addr<StateStore>,
     save_every: u64,
 }
 
@@ -19,20 +19,20 @@ impl Experiment {
     pub fn new(
         id: Uuid,
         policy: Box<dyn Policy + Send>,
-        cache: Addr<ExperimentCache>,
+        state_store: Addr<StateStore>,
         save_every: u64,
     ) -> Self {
         Self {
             id,
             policy,
-            cache,
+            state_store,
             save_every,
         }
     }
 
     fn persist(&self) {
         info!(id = %self.id, "Persisting policy state for experiment");
-        self.cache.do_send(InsertExperimentCache {
+        self.state_store.do_send(InsertExperimentState {
             experiment_id: self.id,
             policy: self.policy.clone_box(),
         });

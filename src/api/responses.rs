@@ -1,6 +1,6 @@
 use crate::{
     actors::accountant::{Accountant, LogResponse},
-    policies::DrawResult,
+    policies::{DrawResult, PolicyType},
 };
 
 use actix::Addr;
@@ -12,6 +12,7 @@ use actix_web::{
 };
 use serde::Serialize;
 use std::{
+    collections::HashMap,
     fmt::Debug,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -70,7 +71,7 @@ impl LoggedResponse {
 
 #[derive(Debug, Serialize)]
 pub struct ListExperimentsResponse {
-    pub experiment_ids: Vec<Uuid>,
+    pub experiments: HashMap<Uuid, PolicyType>,
 }
 
 #[derive(Debug, Serialize)]

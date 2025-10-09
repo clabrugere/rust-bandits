@@ -11,7 +11,7 @@ use actix_web::{
     web::{scope, Data},
     App, HttpServer,
 };
-use actors::{accountant::Accountant, experiment_cache::ExperimentCache};
+use actors::{accountant::Accountant, state_store::StateStore};
 use api::responses::log_response;
 use api::routes::{
     add_arm, clear, create, delete_arm, delete_experiment, draw, list, ping, reset, stats, update,
@@ -42,10 +42,10 @@ async fn main() -> Result<(), Error> {
         .init();
 
     let accountant = Data::new(Accountant::new(config.accountant).start());
-    let policy_cache = ExperimentCache::new(config.experiment_cache).start();
+    let state_store = StateStore::new(config.state_store).start();
     let repository = Data::new(RwLock::new(Repository::new(
         config.experiment,
-        policy_cache.clone(),
+        state_store.clone(),
     )));
 
     match repository.write().await.load_experiments().await {

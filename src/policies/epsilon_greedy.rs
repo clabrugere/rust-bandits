@@ -1,6 +1,7 @@
 use super::errors::PolicyError;
 use super::policy::{
     get_timestamp, ArmStats, BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats,
+    PolicyType,
 };
 use super::rng::MaybeSeededRng;
 
@@ -48,28 +49,27 @@ impl EpsilonGreedyArm {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub enum DecayType {
     Exponential { decay: f64 },
     Inverse { decay: f64 },
     Linear { decay: f64, min_epsilon: f64 },
-    None,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedy {
     arms: HashMap<usize, EpsilonGreedyArm>,
     epsilon: f64,
-    epsilon_decay: DecayType,
+    epsilon_decay: Option<DecayType>,
     rng: MaybeSeededRng,
 }
 
 impl EpsilonGreedy {
-    pub fn new(epsilon: f64, decay_type: DecayType, seed: Option<u64>) -> Self {
+    pub fn new(epsilon: f64, epsilon_decay: Option<DecayType>, seed: Option<u64>) -> Self {
         Self {
             arms: HashMap::new(),
             epsilon,
-            epsilon_decay: decay_type,
+            epsilon_decay,
             rng: MaybeSeededRng::new(seed),
         }
     }
@@ -85,12 +85,12 @@ impl EpsilonGreedy {
     fn epsilon_with_decay(&self) -> f64 {
         let total_count = self.total_count() as f64;
         match self.epsilon_decay {
-            DecayType::Exponential { decay } => self.epsilon * (-decay * total_count).exp(),
-            DecayType::Inverse { decay } => self.epsilon / (1.0 + decay * total_count),
-            DecayType::Linear { decay, min_epsilon } => {
+            Some(DecayType::Exponential { decay }) => self.epsilon * (-decay * total_count).exp(),
+            Some(DecayType::Inverse { decay }) => self.epsilon / (1.0 + decay * total_count),
+            Some(DecayType::Linear { decay, min_epsilon }) => {
                 (self.epsilon - decay * total_count).max(min_epsilon)
             }
-            DecayType::None => self.epsilon,
+            None => self.epsilon,
         }
     }
 }
@@ -103,6 +103,14 @@ impl CloneBoxedPolicy for EpsilonGreedy {
 
 #[typetag::serde]
 impl Policy for EpsilonGreedy {
+    fn policy_type(&self) -> PolicyType {
+        PolicyType::EpsilonGreedy {
+            epsilon: self.epsilon,
+            epsilon_decay: self.epsilon_decay,
+            seed: self.rng.seed,
+        }
+    }
+
     fn reset(
         &mut self,
         arm_id: Option<usize>,
@@ -195,7 +203,7 @@ mod tests {
 
     #[test]
     fn create_arm() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         assert!(policy.arms.len() == 0);
 
         let arm_id = policy.add_arm(0.0, 0);
@@ -204,7 +212,7 @@ mod tests {
 
     #[test]
     fn delete_arm() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
@@ -213,7 +221,7 @@ mod tests {
 
     #[test]
     fn draw() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_id));
@@ -221,7 +229,7 @@ mod tests {
 
     #[test]
     fn draw_best() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         let arm_1 = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -232,13 +240,13 @@ mod tests {
 
     #[test]
     fn draw_empty() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         assert!(policy.draw().is_err());
     }
 
     #[test]
     fn update() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -252,7 +260,7 @@ mod tests {
 
     #[test]
     fn update_batch() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -272,7 +280,7 @@ mod tests {
 
     #[test]
     fn decay_none() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, None, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -291,8 +299,11 @@ mod tests {
 
     #[test]
     fn decay_exponential() {
-        let mut policy =
-            EpsilonGreedy::new(0.1, DecayType::Exponential { decay: 0.01 }, Some(SEED));
+        let mut policy = EpsilonGreedy::new(
+            0.1,
+            Some(DecayType::Exponential { decay: 0.01 }),
+            Some(SEED),
+        );
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -311,7 +322,8 @@ mod tests {
 
     #[test]
     fn decay_inverse() {
-        let mut policy = EpsilonGreedy::new(0.1, DecayType::Inverse { decay: 0.01 }, Some(SEED));
+        let mut policy =
+            EpsilonGreedy::new(0.1, Some(DecayType::Inverse { decay: 0.01 }), Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -332,10 +344,10 @@ mod tests {
     fn decay_linear() {
         let mut policy = EpsilonGreedy::new(
             0.1,
-            DecayType::Linear {
+            Some(DecayType::Linear {
                 decay: 0.01,
                 min_epsilon: 0.01,
-            },
+            }),
             Some(SEED),
         );
         let _ = policy.add_arm(0.0, 0);

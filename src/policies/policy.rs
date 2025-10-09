@@ -19,27 +19,27 @@ pub struct DrawResult {
 
 pub type BatchUpdateElement = (f64, usize, f64);
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ArmStats {
     pub pulls: u64,
     pub mean_reward: f64,
     pub is_active: bool,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Debug, Serialize)]
 pub struct PolicyStats {
     pub arms: HashMap<usize, ArmStats>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PolicyType {
     EpsilonGreedy {
         epsilon: f64,
-        epsilon_decay: DecayType,
+        epsilon_decay: Option<DecayType>,
         seed: Option<u64>,
     },
     ThomsonSampling {
-        discount_factor: Option<f64>,
+        halflife_seconds: Option<f64>,
         seed: Option<u64>,
     },
     Ucb {
@@ -57,9 +57,9 @@ impl PolicyType {
                 seed,
             } => Box::new(EpsilonGreedy::new(epsilon, epsilon_decay, seed)),
             PolicyType::ThomsonSampling {
-                discount_factor,
+                halflife_seconds,
                 seed,
-            } => Box::new(ThomsonSampling::new(discount_factor, seed)),
+            } => Box::new(ThomsonSampling::new(halflife_seconds, seed)),
             PolicyType::Ucb { alpha, seed } => Box::new(Ucb::new(alpha, seed)),
         }
     }
@@ -89,6 +89,7 @@ pub trait Policy: Send + CloneBoxedPolicy {
     fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError>;
     fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError>;
     fn stats(&self) -> PolicyStats;
+    fn policy_type(&self) -> PolicyType;
 }
 
 pub fn get_timestamp() -> f64 {

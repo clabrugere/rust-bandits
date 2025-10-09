@@ -5,8 +5,8 @@ port = "8080"
 
 [accountant]
 
-[experiment_cache]
-path = "./cache"
+[state_store]
+path = "./state_store"
 persist_every = "60"
 
 [experiment]

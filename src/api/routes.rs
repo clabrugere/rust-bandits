@@ -28,7 +28,7 @@ async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
         .read()
         .await
         .list_experiments()
-        .map(|experiment_ids| Json(ListExperimentsResponse { experiment_ids }))
+        .map(|experiments| Json(ListExperimentsResponse { experiments }))
         .map_err(|_| ApiResponseError::InternalError)?;
 
     Ok(response)

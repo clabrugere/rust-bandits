@@ -1,6 +1,7 @@
 use super::errors::PolicyError;
 use super::policy::{
     get_timestamp, ArmStats, BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats,
+    PolicyType,
 };
 use super::rng::MaybeSeededRng;
 
@@ -80,6 +81,13 @@ impl CloneBoxedPolicy for Ucb {
 
 #[typetag::serde]
 impl Policy for Ucb {
+    fn policy_type(&self) -> PolicyType {
+        PolicyType::Ucb {
+            alpha: self.alpha,
+            seed: self.rng.seed,
+        }
+    }
+
     fn reset(
         &mut self,
         arm_id: Option<usize>,

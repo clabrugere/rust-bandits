@@ -1,6 +1,7 @@
 use super::errors::PolicyError;
 use super::policy::{
     get_timestamp, ArmStats, BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats,
+    PolicyType,
 };
 use super::rng::MaybeSeededRng;
 
@@ -60,8 +61,6 @@ impl ThomsonSamplingArm {
 
     fn apply_discount(&mut self, timestamp: f64) {
         let decay = self.decay_weight(timestamp);
-        println!("{:?}", decay);
-
         self.alpha = (self.alpha * decay).max(EPS);
         self.beta = (self.beta * decay).max(EPS);
         self.last_ts = timestamp;
@@ -119,6 +118,13 @@ impl CloneBoxedPolicy for ThomsonSampling {
 
 #[typetag::serde]
 impl Policy for ThomsonSampling {
+    fn policy_type(&self) -> PolicyType {
+        PolicyType::ThomsonSampling {
+            halflife_seconds: self.halflife_seconds,
+            seed: self.rng.seed,
+        }
+    }
+
     fn reset(
         &mut self,
         arm_id: Option<usize>,

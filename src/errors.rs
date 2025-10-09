@@ -36,9 +36,9 @@ pub enum ExperimentOrPolicyError {
 
 #[derive(Debug, Error)]
 pub enum PersistenceError {
-    #[error("I/O error while writing cache: {0}")]
+    #[error("I/O error while writing state store: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Failed to serialize cache to JSON: {0}")]
+    #[error("Failed to serialize state store to JSON: {0}")]
     Serialization(#[from] serde_json::Error),
 }

@@ -20,9 +20,9 @@ In our system, the HTTP server interacts with a **Repository** that is responsib
 
 Each experiment is an actor implementing some policy, handling the optimization. The repository either creates or deletes experiments, or simply dispatch a message to a running experiment. This allows to have low coupling between experiments and to process requests for different experiments in a non blocking way. 
 
-Individual experiments periodically send their state to a cache actor, that is also persisted to disk for recovery in case of an application crash.
+Individual experiments periodically send their state to a **StateStore** actor, that is also persisted to disk for recovery in case of an application crash.
 
-Finally, every request along with the response is processed by a middleware and sent to an **accountant** actor, responsible for tracking. It interacts with some storage to persist logs (such as a relational database) while not blocking the rest of the application.
+Finally, every request along with the response is processed by a middleware and sent to an **Accountant** actor, responsible for tracking. It interacts with some storage to persist logs (such as a relational database) while not blocking the rest of the application.
 
 ## Getting Started
 
@@ -84,8 +84,8 @@ The system currently exposes 12 routes:
 **Core**
 - [ ] Implement the restart of unresponsive experiments
 - [ ] Implement storage for logs and its interactions with the accountant actor
-- [ ] Create routes to disable/enable variants and experiments
-- [ ] Improve cache persistence to allow for some historization
+- [ ] Create routes to disable/enable arms
+- [ ] Improve StateStore persistence to allow for some historization
 - [ ] Implement metrics collection system to monitor the service
 
 **Policies**
