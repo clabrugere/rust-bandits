@@ -49,18 +49,48 @@ impl EpsilonGreedyArm {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DecayType {
+    Exponential { decay: f64 },
+    Inverse { decay: f64 },
+    Linear { decay: f64, min_epsilon: f64 },
+    None,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EpsilonGreedy {
     arms: HashMap<usize, EpsilonGreedyArm>,
     epsilon: f64,
+    epsilon_decay: DecayType,
     rng: MaybeSeededRng,
 }
 
 impl EpsilonGreedy {
-    pub fn new(epsilon: f64, seed: Option<u64>) -> Self {
+    pub fn new(epsilon: f64, decay_type: DecayType, seed: Option<u64>) -> Self {
         Self {
             arms: HashMap::new(),
             epsilon,
+            epsilon_decay: decay_type,
             rng: MaybeSeededRng::new(seed),
+        }
+    }
+
+    fn total_count(&self) -> u64 {
+        self.arms
+            .values()
+            .filter(|arm| arm.is_active)
+            .map(|arm| arm.count)
+            .sum()
+    }
+
+    fn epsilon_with_decay(&self) -> f64 {
+        let total_count = self.total_count() as f64;
+        match self.epsilon_decay {
+            DecayType::Exponential { decay } => self.epsilon * (-decay * total_count).exp(),
+            DecayType::Inverse { decay } => self.epsilon / (1.0 + decay * total_count),
+            DecayType::Linear { decay, min_epsilon } => {
+                (self.epsilon - decay * total_count).max(min_epsilon)
+            }
+            DecayType::None => self.epsilon,
         }
     }
 }
@@ -107,19 +137,17 @@ impl Policy for EpsilonGreedy {
 
     fn draw(&mut self) -> Result<DrawResult, PolicyError> {
         let timestamp = get_timestamp();
+        let arm_iterator = self.arms.iter().filter(|(_, arm)| arm.is_active);
+        let epsilon = self.epsilon_with_decay();
 
         // either sample a random arm or return the one with the highest reward so far
-        let arm_id = if self.rng.get_rng().random::<f64>() < self.epsilon {
-            self.arms
-                .iter()
-                .filter(|(_, arm)| arm.is_active)
+        let arm_id = if self.rng.get_rng().random::<f64>() < epsilon {
+            arm_iterator
                 .map(|(&arm_id, _)| arm_id)
                 .choose(&mut self.rng.get_rng())
                 .ok_or(PolicyError::NoArmsAvailable)
         } else {
-            self.arms
-                .iter()
-                .filter(|(_, arm)| arm.is_active)
+            arm_iterator
                 .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
                     Ok(sample) => Some((arm_id, sample)),
                     Err(_) => None,
@@ -167,7 +195,7 @@ mod tests {
 
     #[test]
     fn create_arm() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         assert!(policy.arms.len() == 0);
 
         let arm_id = policy.add_arm(0.0, 0);
@@ -176,7 +204,7 @@ mod tests {
 
     #[test]
     fn delete_arm() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
@@ -185,7 +213,7 @@ mod tests {
 
     #[test]
     fn draw() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         let arm_id = policy.add_arm(0.0, 0);
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_id));
@@ -193,7 +221,7 @@ mod tests {
 
     #[test]
     fn draw_best() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         let arm_1 = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -204,13 +232,13 @@ mod tests {
 
     #[test]
     fn draw_empty() {
-        let mut policy = EpsilonGreedy::new(0.15, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         assert!(policy.draw().is_err());
     }
 
     #[test]
     fn update() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -224,7 +252,7 @@ mod tests {
 
     #[test]
     fn update_batch() {
-        let mut policy = EpsilonGreedy::new(0.0, Some(SEED));
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -240,5 +268,101 @@ mod tests {
         updates.iter().for_each(|(_, arm_id, reward)| {
             assert_eq!(policy.arms.get(&arm_id).unwrap().reward, *reward);
         });
+    }
+
+    #[test]
+    fn decay_none() {
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::None, Some(SEED));
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
+
+        let draws = (0..3)
+            .map(|_| policy.draw().unwrap())
+            .collect::<Vec<DrawResult>>();
+        let updates = draws
+            .iter()
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
+
+        _ = policy.update_batch(&updates);
+
+        assert_eq!(policy.epsilon_with_decay(), 0.1);
+    }
+
+    #[test]
+    fn decay_exponential() {
+        let mut policy =
+            EpsilonGreedy::new(0.1, DecayType::Exponential { decay: 0.01 }, Some(SEED));
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
+
+        let draws = (0..3)
+            .map(|_| policy.draw().unwrap())
+            .collect::<Vec<DrawResult>>();
+        let updates = draws
+            .iter()
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
+
+        _ = policy.update_batch(&updates);
+
+        assert!((policy.epsilon_with_decay() - 0.097045).abs() < 1e-6);
+    }
+
+    #[test]
+    fn decay_inverse() {
+        let mut policy = EpsilonGreedy::new(0.1, DecayType::Inverse { decay: 0.01 }, Some(SEED));
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
+
+        let draws = (0..3)
+            .map(|_| policy.draw().unwrap())
+            .collect::<Vec<DrawResult>>();
+        let updates = draws
+            .iter()
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
+
+        _ = policy.update_batch(&updates);
+
+        assert!((policy.epsilon_with_decay() - 0.097087).abs() < 1e-6);
+    }
+
+    #[test]
+    fn decay_linear() {
+        let mut policy = EpsilonGreedy::new(
+            0.1,
+            DecayType::Linear {
+                decay: 0.01,
+                min_epsilon: 0.01,
+            },
+            Some(SEED),
+        );
+        let _ = policy.add_arm(0.0, 0);
+        let _ = policy.add_arm(0.0, 0);
+
+        let draws = (0..3)
+            .map(|_| policy.draw().unwrap())
+            .collect::<Vec<DrawResult>>();
+        let updates = draws
+            .iter()
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
+
+        _ = policy.update_batch(&updates);
+
+        assert!((policy.epsilon_with_decay() - 0.07).abs() < 1e-6);
+
+        let draws = (0..10)
+            .map(|_| policy.draw().unwrap())
+            .collect::<Vec<DrawResult>>();
+        let updates = draws
+            .iter()
+            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .collect::<Vec<BatchUpdateElement>>();
+
+        _ = policy.update_batch(&updates);
+
+        assert_eq!(policy.epsilon_with_decay(), 0.01);
     }
 }
