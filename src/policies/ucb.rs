@@ -113,6 +113,20 @@ impl Policy for Ucb {
         arm_id
     }
 
+    fn disable_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
+        self.arms
+            .get_mut(&arm_id)
+            .map(|arm| arm.is_active = false)
+            .ok_or(PolicyError::ArmNotFound(arm_id))
+    }
+
+    fn enable_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
+        self.arms
+            .get_mut(&arm_id)
+            .map(|arm| arm.is_active = true)
+            .ok_or(PolicyError::ArmNotFound(arm_id))
+    }
+
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
         self.arms
             .remove(&arm_id)
@@ -190,6 +204,35 @@ mod tests {
 
         let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.arms.contains_key(&arm_id))
+    }
+
+    #[test]
+    fn disable_arm() {
+        let mut policy = Ucb::new(1.0, Some(SEED));
+        let arm_id = policy.add_arm(0.0, 0);
+
+        assert!(policy.disable_arm(arm_id).is_ok());
+        assert_eq!(
+            policy.arms.iter().filter(|(_, arm)| arm.is_active).count(),
+            0
+        );
+    }
+
+    #[test]
+    fn enable_arm() {
+        let mut policy = Ucb::new(1.0, Some(SEED));
+        let arm_id = policy.add_arm(0.0, 0);
+
+        assert!(policy.disable_arm(arm_id).is_ok());
+        assert_eq!(
+            policy.arms.iter().filter(|(_, arm)| arm.is_active).count(),
+            0
+        );
+        assert!(policy.enable_arm(arm_id).is_ok());
+        assert_eq!(
+            policy.arms.iter().filter(|(_, arm)| arm.is_active).count(),
+            1
+        );
     }
 
     #[test]

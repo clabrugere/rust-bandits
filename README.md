@@ -84,7 +84,7 @@ The system currently exposes 12 routes:
 **Core**
 - [ ] Implement the restart of unresponsive experiments
 - [ ] Implement storage for logs and its interactions with the accountant actor
-- [ ] Create routes to disable/enable arms
+- [x] Create routes to disable/enable arms
 - [ ] Improve StateStore persistence to allow for some historization
 - [ ] Implement metrics collection system to monitor the service
 

@@ -24,7 +24,7 @@ use tracing::warn;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::{
-    api::routes::{ping_experiment, reset_arm},
+    api::routes::{disable_arm, enable_arm, ping_experiment, reset_arm},
     repository::Repository,
 };
 
@@ -72,9 +72,11 @@ async fn main() -> Result<(), Error> {
                         .service(create)
                         .service(ping_experiment)
                         .service(reset)
-                        .service(reset_arm)
                         .service(delete_experiment)
                         .service(add_arm)
+                        .service(disable_arm)
+                        .service(enable_arm)
+                        .service(reset_arm)
                         .service(delete_arm)
                         .service(draw)
                         .service(update)

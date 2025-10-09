@@ -84,6 +84,8 @@ pub trait Policy: Send + CloneBoxedPolicy {
         count: Option<u64>,
     ) -> Result<(), PolicyError>;
     fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize;
+    fn disable_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
+    fn enable_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError>;
     fn draw(&mut self) -> Result<DrawResult, PolicyError>;
     fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError>;

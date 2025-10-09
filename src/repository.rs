@@ -3,7 +3,7 @@ use super::actors::state_store::{ReadFullExperimentState, StateStore};
 use super::errors::{RepositoryError, RepositoryOrExperimentError};
 
 use crate::actors::experiment::{
-    AddArm, DeleteArm, Draw, GetStats, Ping, Reset, Update, UpdateBatch,
+    AddArm, DeleteArm, DisableArm, Draw, EnableArm, GetStats, Ping, Reset, Update, UpdateBatch,
 };
 use crate::config::ExperimentConfig;
 use crate::policies::{BatchUpdateElement, DrawResult, Policy, PolicyStats, PolicyType};
@@ -168,6 +168,26 @@ impl Repository {
             },
         )
         .await
+    }
+
+    pub async fn enable_experiment_arm(
+        &self,
+        experiment_id: Uuid,
+        arm_id: usize,
+    ) -> Result<(), RepositoryOrExperimentError> {
+        self.send_to_experiment(experiment_id, EnableArm { arm_id })
+            .await?
+            .map_err(RepositoryOrExperimentError::from)
+    }
+
+    pub async fn disable_experiment_arm(
+        &self,
+        experiment_id: Uuid,
+        arm_id: usize,
+    ) -> Result<(), RepositoryOrExperimentError> {
+        self.send_to_experiment(experiment_id, DisableArm { arm_id })
+            .await?
+            .map_err(RepositoryOrExperimentError::from)
     }
 
     pub async fn delete_experiment_arm(

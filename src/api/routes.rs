@@ -58,10 +58,10 @@ async fn create(
 #[get("{experiment_id}/ping")]
 async fn ping_experiment(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
+    path: Path<String>,
 ) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
         .await
@@ -74,12 +74,9 @@ async fn ping_experiment(
 }
 
 #[put("{experiment_id}/reset")]
-async fn reset(
-    repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
-) -> Result<impl Responder> {
+async fn reset(repository: Data<RwLock<Repository>>, path: Path<String>) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
         .await
@@ -91,16 +88,14 @@ async fn reset(
     Ok(response)
 }
 
-#[post("{experiment_id}/reset/{arm_id}")]
+#[post("{experiment_id}/{arm_id}/reset")]
 async fn reset_arm(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
-    arm_id: Path<usize>,
+    path: Path<(String, usize)>,
     payload: Json<ResetArmPayload>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let arm_id = arm_id.into_inner();
+    let (experiment_id, arm_id) = path.into_inner();
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
     let ResetArmPayload {
         cumulative_reward,
         count,
@@ -119,10 +114,10 @@ async fn reset_arm(
 #[delete("{experiment_id}/delete")]
 async fn delete_experiment(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
+    path: Path<String>,
 ) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .write()
         .await
@@ -137,15 +132,15 @@ async fn delete_experiment(
 #[post("{experiment_id}/add_arm")]
 async fn add_arm(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
-    initial_state: Json<AddArmPayload>,
+    path: Path<String>,
+    payload: Json<AddArmPayload>,
 ) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let AddArmPayload {
         initial_reward,
         initial_count,
-    } = initial_state.into_inner();
+    } = payload.into_inner();
     let arm_id = repository
         .read()
         .await
@@ -156,15 +151,49 @@ async fn add_arm(
     Ok(Json(AddExperimentArmResponse { arm_id }))
 }
 
-#[delete("{experiment_id}/delete_arm/{arm_id}")]
+#[put("{experiment_id}/{arm_id}/disable")]
+async fn disable_arm(
+    repository: Data<RwLock<Repository>>,
+    path: Path<(String, usize)>,
+) -> Result<impl Responder> {
+    let (experiment_id, arm_id) = path.into_inner();
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let response = repository
+        .read()
+        .await
+        .disable_experiment_arm(experiment_id, arm_id)
+        .await
+        .map(|_| HttpResponse::Ok())
+        .map_err(ApiResponseError::ErrorBadRequest)?;
+
+    Ok(response)
+}
+
+#[put("{experiment_id}/{arm_id}/enable")]
+async fn enable_arm(
+    repository: Data<RwLock<Repository>>,
+    path: Path<(String, usize)>,
+) -> Result<impl Responder> {
+    let (experiment_id, arm_id) = path.into_inner();
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let response = repository
+        .read()
+        .await
+        .enable_experiment_arm(experiment_id, arm_id)
+        .await
+        .map(|_| HttpResponse::Ok())
+        .map_err(ApiResponseError::ErrorBadRequest)?;
+
+    Ok(response)
+}
+
+#[delete("{experiment_id}/{arm_id}/delete")]
 async fn delete_arm(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
-    arm_id: Path<usize>,
+    path: Path<(String, usize)>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
-    let arm_id = arm_id.into_inner();
+    let (experiment_id, arm_id) = path.into_inner();
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
         .await
@@ -177,12 +206,9 @@ async fn delete_arm(
 }
 
 #[get("{experiment_id}/draw")]
-async fn draw(
-    repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
-) -> Result<impl Responder> {
+async fn draw(repository: Data<RwLock<Repository>>, path: Path<String>) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let draw_result = repository
         .read()
         .await
@@ -196,11 +222,11 @@ async fn draw(
 #[put("{experiment_id}/update")]
 async fn update(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
+    path: Path<String>,
     payload: Json<UpdatePayload>,
 ) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let UpdatePayload {
         timestamp,
         arm_id,
@@ -220,11 +246,11 @@ async fn update(
 #[put("{experiment_id}/update_batch")]
 async fn update_batch(
     repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
+    path: Path<String>,
     payload: Json<UpdateBatchPayload>,
 ) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let updates = payload
         .into_inner()
         .updates
@@ -244,12 +270,9 @@ async fn update_batch(
 }
 
 #[get("{experiment_id}/stats")]
-async fn stats(
-    repository: Data<RwLock<Repository>>,
-    experiment_id: Path<String>,
-) -> Result<impl Responder> {
+async fn stats(repository: Data<RwLock<Repository>>, path: Path<String>) -> Result<impl Responder> {
     let experiment_id =
-        Uuid::try_parse(&experiment_id.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
     let response = repository
         .read()
         .await

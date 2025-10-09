@@ -72,6 +72,18 @@ pub struct AddArm {
 
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentOrPolicyError>")]
+pub struct DisableArm {
+    pub arm_id: usize,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
+pub struct EnableArm {
+    pub arm_id: usize,
+}
+
+#[derive(Message)]
+#[rtype(result = "Result<(), ExperimentOrPolicyError>")]
 pub struct DeleteArm {
     pub arm_id: usize,
 }
@@ -122,6 +134,26 @@ impl Handler<AddArm> for Experiment {
             msg.initial_reward.unwrap_or_default(),
             msg.initial_count.unwrap_or_default(),
         )
+    }
+}
+
+impl Handler<DisableArm> for Experiment {
+    type Result = Result<(), ExperimentOrPolicyError>;
+
+    fn handle(&mut self, msg: DisableArm, _: &mut Self::Context) -> Self::Result {
+        self.policy
+            .disable_arm(msg.arm_id)
+            .map_err(ExperimentOrPolicyError::from)
+    }
+}
+
+impl Handler<EnableArm> for Experiment {
+    type Result = Result<(), ExperimentOrPolicyError>;
+
+    fn handle(&mut self, msg: EnableArm, _: &mut Self::Context) -> Self::Result {
+        self.policy
+            .enable_arm(msg.arm_id)
+            .map_err(ExperimentOrPolicyError::from)
     }
 }
 
