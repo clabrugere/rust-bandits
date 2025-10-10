@@ -11,6 +11,8 @@ pub(super) enum ApiResponseError {
     ErrorBadRequest(#[from] RepositoryOrExperimentError),
     #[error(transparent)]
     ErrorBadUuid(#[from] uuid::Error),
+    #[error("Accountant not available")]
+    AccountantNotAvailable,
 }
 
 impl ResponseError for ApiResponseError {
@@ -19,6 +21,7 @@ impl ResponseError for ApiResponseError {
             ApiResponseError::InternalError => StatusCode::INTERNAL_SERVER_ERROR,
             ApiResponseError::ErrorBadRequest(_) => StatusCode::BAD_REQUEST,
             ApiResponseError::ErrorBadUuid(_) => StatusCode::BAD_REQUEST,
+            ApiResponseError::AccountantNotAvailable => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

@@ -5,8 +5,6 @@ use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
-    //#[error("Lock poisoned")]
-    //Poisoned,
     #[error("Experiment {0} not available")]
     ExperimentNotAvailable(Uuid),
     #[error("Experiment {0} not found")]
@@ -41,6 +39,6 @@ pub enum PersistenceError {
     #[error("I/O error while writing state store: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Failed to serialize state store to JSON: {0}")]
+    #[error("Failed to serialize state store: {0}")]
     Serialization(#[from] serde_json::Error),
 }

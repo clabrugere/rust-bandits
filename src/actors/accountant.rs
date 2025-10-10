@@ -3,7 +3,7 @@
 use crate::{api::responses::LoggedResponse, config::AccountantConfig};
 
 use actix::{Actor, Context, Handler, Message};
-use tracing::{debug, info};
+use tracing::info;
 
 pub struct Accountant {
     config: AccountantConfig,
@@ -35,12 +35,12 @@ impl Handler<LogResponse> for Accountant {
     type Result = ();
 
     fn handle(&mut self, msg: LogResponse, _: &mut Self::Context) -> Self::Result {
-        debug!(
+        info!(
             id = %msg.response.id,
             route = %msg.response.route,
             status = msg.response.status,
             timestamp = msg.response.timestamp,
-            "Persisting log entry to storage"
+            "Persisting log entry"
         );
 
         //TODO: Implement database storage
@@ -50,7 +50,7 @@ impl Handler<LogResponse> for Accountant {
         // actix::spawn(async move {
         //     sqlx::query!(
         //         "INSERT INTO request_logs (id, timestamp, route, status) VALUES ($1, $2, $3, $4)",
-        //         log.id, log.timestamp as i64, log.route, log.status as i16
+        //         log.id, log.timestamp, log.route, log.status as i16
         //     )
         //     .execute(&pool)
         //     .await

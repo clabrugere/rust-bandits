@@ -1,5 +1,6 @@
 use crate::{
     actors::accountant::{Accountant, LogResponse},
+    api::errors::ApiResponseError,
     policies::{DrawResult, PolicyType},
 };
 
@@ -39,11 +40,14 @@ pub async fn log_response(
         "Request"
     );
 
-    if let Some(accountant) = accountant {
-        accountant.do_send(LogResponse {
-            response: LoggedResponse::new(request_id, &path, status.as_u16()),
-        });
-    }
+    accountant
+        .map(|addr| {
+            addr.do_send(LogResponse {
+                response: LoggedResponse::new(request_id, &path, status.as_u16()),
+            })
+        })
+        .ok_or(ApiResponseError::AccountantNotAvailable)?;
+
     Ok(response)
 }
 
