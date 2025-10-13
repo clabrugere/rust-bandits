@@ -89,7 +89,7 @@ The system currently exposes 12 routes:
 - [x] Create routes to disable/enable arms
 - [ ] Improve StateStore persistence to allow for some historization
 - [ ] Implement metrics collection system to monitor the service
-- [ ] Improve error handling
+- [x] Improve error handling
 
 **Policies**
 - [x] Optional epsilon decay

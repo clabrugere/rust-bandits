@@ -1,9 +1,10 @@
-use super::errors::PolicyError;
 use super::policy::{
     get_timestamp, ArmStats, BatchUpdateElement, CloneBoxedPolicy, DrawResult, Policy, PolicyStats,
     PolicyType,
 };
 use super::rng::MaybeSeededRng;
+
+use crate::errors::PolicyError;
 
 use rand::Rng;
 use rand_distr::Beta;

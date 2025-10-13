@@ -5,6 +5,9 @@ mod errors;
 mod policies;
 mod repository;
 
+use crate::api::routes::{disable_arm, enable_arm, ping_experiment, reset_arm};
+use crate::repository::Repository;
+
 use actix::prelude::*;
 use actix_web::{
     middleware::from_fn,
@@ -22,11 +25,6 @@ use std::io::Error;
 use tokio::sync::RwLock;
 use tracing::warn;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-use crate::{
-    api::routes::{disable_arm, enable_arm, ping_experiment, reset_arm},
-    repository::Repository,
-};
 
 #[actix_web::main]
 async fn main() -> Result<(), Error> {

@@ -1,9 +1,8 @@
-use crate::policies::epsilon_greedy::DecayType;
-
-use super::epsilon_greedy::EpsilonGreedy;
-use super::errors::PolicyError;
+use super::epsilon_greedy::{DecayType, EpsilonGreedy};
 use super::thomson_sampling::ThomsonSampling;
 use super::ucb::Ucb;
+
+use crate::errors::PolicyError;
 
 use serde::{Deserialize, Serialize};
 use std::{

@@ -1,5 +1,4 @@
 pub mod epsilon_greedy;
-pub mod errors;
 mod policy;
 mod rng;
 pub mod thomson_sampling;

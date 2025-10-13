@@ -1,5 +1,6 @@
+use crate::config::StateStoreConfig;
 use crate::errors::PersistenceError;
-use crate::{config::StateStoreConfig, policies::Policy};
+use crate::policies::Policy;
 
 use actix::prelude::*;
 use std::{collections::HashMap, fs::File, io::BufReader, time::Duration};

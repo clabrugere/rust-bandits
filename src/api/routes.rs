@@ -1,11 +1,12 @@
 use tokio::sync::RwLock;
 
-use super::errors::ApiResponseError;
 use super::requests::{AddArmPayload, UpdateBatchPayload, UpdatePayload};
 use super::responses::{
     AddExperimentArmResponse, CreateExperimentResponse, DrawResponse, ListExperimentsResponse,
 };
+
 use crate::api::requests::ResetArmPayload;
+use crate::errors::ApiError;
 use crate::policies::PolicyType;
 use crate::repository::Repository;
 
@@ -28,7 +29,7 @@ async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
         .await
         .list_experiments()
         .map(|experiments| Json(ListExperimentsResponse { experiments }))
-        .map_err(|_| ApiResponseError::InternalError)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -59,30 +60,28 @@ async fn ping_experiment(
     repository: Data<RwLock<Repository>>,
     path: Path<String>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let response = repository
         .read()
         .await
         .ping_experiment(experiment_id)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
 
 #[put("{experiment_id}/reset")]
 async fn reset(repository: Data<RwLock<Repository>>, path: Path<String>) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let response = repository
         .read()
         .await
         .reset_experiment(experiment_id, None, None, None)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -94,7 +93,7 @@ async fn reset_arm(
     payload: Json<ResetArmPayload>,
 ) -> Result<impl Responder> {
     let (experiment_id, arm_id) = path.into_inner();
-    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiError::from)?;
     let ResetArmPayload {
         cumulative_reward,
         count,
@@ -105,7 +104,7 @@ async fn reset_arm(
         .reset_experiment(experiment_id, Some(arm_id), cumulative_reward, count)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -115,15 +114,14 @@ async fn delete_experiment(
     repository: Data<RwLock<Repository>>,
     path: Path<String>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let response = repository
         .write()
         .await
         .delete_experiment(experiment_id)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -134,8 +132,7 @@ async fn add_arm(
     path: Path<String>,
     payload: Json<AddArmPayload>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let AddArmPayload {
         initial_reward,
         initial_count,
@@ -145,7 +142,7 @@ async fn add_arm(
         .await
         .add_experiment_arm(experiment_id, initial_reward, initial_count)
         .await
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(Json(AddExperimentArmResponse { arm_id }))
 }
@@ -156,14 +153,14 @@ async fn disable_arm(
     path: Path<(String, usize)>,
 ) -> Result<impl Responder> {
     let (experiment_id, arm_id) = path.into_inner();
-    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiError::from)?;
     let response = repository
         .read()
         .await
         .disable_experiment_arm(experiment_id, arm_id)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -174,14 +171,14 @@ async fn enable_arm(
     path: Path<(String, usize)>,
 ) -> Result<impl Responder> {
     let (experiment_id, arm_id) = path.into_inner();
-    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiError::from)?;
     let response = repository
         .read()
         .await
         .enable_experiment_arm(experiment_id, arm_id)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -192,28 +189,27 @@ async fn delete_arm(
     path: Path<(String, usize)>,
 ) -> Result<impl Responder> {
     let (experiment_id, arm_id) = path.into_inner();
-    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&experiment_id).map_err(ApiError::from)?;
     let response = repository
         .read()
         .await
         .delete_experiment_arm(experiment_id, arm_id)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
 
 #[get("{experiment_id}/draw")]
 async fn draw(repository: Data<RwLock<Repository>>, path: Path<String>) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let draw_result = repository
         .read()
         .await
         .draw_experiment(experiment_id)
         .await
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(Json(DrawResponse::from(draw_result)))
 }
@@ -224,8 +220,7 @@ async fn update(
     path: Path<String>,
     payload: Json<UpdatePayload>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let UpdatePayload {
         timestamp,
         arm_id,
@@ -237,7 +232,7 @@ async fn update(
         .update_experiment(experiment_id, timestamp, arm_id, reward)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
@@ -248,8 +243,7 @@ async fn update_batch(
     path: Path<String>,
     payload: Json<UpdateBatchPayload>,
 ) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let updates = payload
         .into_inner()
         .updates
@@ -263,22 +257,21 @@ async fn update_batch(
         .batch_update_experiment(experiment_id, updates)
         .await
         .map(|_| HttpResponse::Ok())
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }
 
 #[get("{experiment_id}/stats")]
 async fn stats(repository: Data<RwLock<Repository>>, path: Path<String>) -> Result<impl Responder> {
-    let experiment_id =
-        Uuid::try_parse(&path.into_inner()).map_err(ApiResponseError::ErrorBadUuid)?;
+    let experiment_id = Uuid::try_parse(&path.into_inner()).map_err(ApiError::from)?;
     let response = repository
         .read()
         .await
         .get_experiment_stats(experiment_id)
         .await
         .map(Json)
-        .map_err(ApiResponseError::ErrorBadRequest)?;
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }

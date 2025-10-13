@@ -1,6 +1,6 @@
 use super::actors::experiment::Experiment;
 use super::actors::state_store::{LoadAllStates, StateStore};
-use super::errors::{RepositoryError, RepositoryOrExperimentError};
+use super::errors::RepositoryError;
 
 use crate::actors::experiment::{
     AddArm, DeleteArm, DisableArm, Draw, EnableArm, GetStats, Ping, Reset, Stop, Update,
@@ -46,28 +46,26 @@ impl Repository {
                     info!(id = %experiment_id, "Loaded experiment");
                 });
             })
-            .map_err(|err| RepositoryError::StorageError(err.to_string()))
+            .map_err(|_| RepositoryError::StorageUnavailable)
     }
 
     fn get_experiment_address(
         &self,
         experiment_id: Uuid,
-    ) -> Result<Addr<Experiment>, RepositoryOrExperimentError> {
+    ) -> Result<Addr<Experiment>, RepositoryError> {
         // cloning the address of an actor is cheap
         self.experiments
             .get(&experiment_id)
             .map(|e| &e.address)
             .cloned()
-            .ok_or(RepositoryOrExperimentError::Repository(
-                RepositoryError::ExperimentNotFound(experiment_id),
-            ))
+            .ok_or(RepositoryError::ExperimentNotFound(experiment_id))
     }
 
     async fn send_to_experiment<M>(
         &self,
         experiment_id: Uuid,
         message: M,
-    ) -> Result<M::Result, RepositoryOrExperimentError>
+    ) -> Result<M::Result, RepositoryError>
     where
         M: Message + Send + 'static,
         M::Result: Send + 'static,
@@ -76,17 +74,10 @@ impl Repository {
         self.get_experiment_address(experiment_id)?
             .send(message)
             .await
-            .map_err(|_| {
-                RepositoryOrExperimentError::Repository(RepositoryError::ExperimentNotAvailable(
-                    experiment_id,
-                ))
-            })
+            .map_err(|_| RepositoryError::ExperimentUnavailable(experiment_id))
     }
 
-    pub async fn ping_experiment(
-        &self,
-        experiment_id: Uuid,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    pub async fn ping_experiment(&self, experiment_id: Uuid) -> Result<(), RepositoryError> {
         self.send_to_experiment(experiment_id, Ping).await
     }
 
@@ -128,10 +119,7 @@ impl Repository {
         experiment_id
     }
 
-    pub async fn delete_experiment(
-        &mut self,
-        experiment_id: Uuid,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    pub async fn delete_experiment(&mut self, experiment_id: Uuid) -> Result<(), RepositoryError> {
         self.get_experiment_address(experiment_id)?.do_send(Stop);
         self.experiments.remove(&experiment_id);
         Ok(())
@@ -143,7 +131,7 @@ impl Repository {
         arm_id: Option<usize>,
         cumulative_reward: Option<f64>,
         count: Option<u64>,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    ) -> Result<(), RepositoryError> {
         self.send_to_experiment(
             experiment_id,
             Reset {
@@ -153,7 +141,7 @@ impl Repository {
             },
         )
         .await?
-        .map_err(RepositoryOrExperimentError::from)
+        .map_err(RepositoryError::from)
     }
 
     pub async fn add_experiment_arm(
@@ -161,7 +149,7 @@ impl Repository {
         experiment_id: Uuid,
         initial_reward: Option<f64>,
         initial_count: Option<u64>,
-    ) -> Result<usize, RepositoryOrExperimentError> {
+    ) -> Result<usize, RepositoryError> {
         self.send_to_experiment(
             experiment_id,
             AddArm {
@@ -170,46 +158,46 @@ impl Repository {
             },
         )
         .await?
-        .map_err(RepositoryOrExperimentError::from)
+        .map_err(RepositoryError::from)
     }
 
     pub async fn enable_experiment_arm(
         &self,
         experiment_id: Uuid,
         arm_id: usize,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    ) -> Result<(), RepositoryError> {
         self.send_to_experiment(experiment_id, EnableArm { arm_id })
             .await?
-            .map_err(RepositoryOrExperimentError::from)
+            .map_err(RepositoryError::from)
     }
 
     pub async fn disable_experiment_arm(
         &self,
         experiment_id: Uuid,
         arm_id: usize,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    ) -> Result<(), RepositoryError> {
         self.send_to_experiment(experiment_id, DisableArm { arm_id })
             .await?
-            .map_err(RepositoryOrExperimentError::from)
+            .map_err(RepositoryError::from)
     }
 
     pub async fn delete_experiment_arm(
         &self,
         experiment_id: Uuid,
         arm_id: usize,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    ) -> Result<(), RepositoryError> {
         self.send_to_experiment(experiment_id, DeleteArm { arm_id })
             .await?
-            .map_err(RepositoryOrExperimentError::from)
+            .map_err(RepositoryError::from)
     }
 
     pub async fn draw_experiment(
         &self,
         experiment_id: Uuid,
-    ) -> Result<DrawResult, RepositoryOrExperimentError> {
+    ) -> Result<DrawResult, RepositoryError> {
         self.send_to_experiment(experiment_id, Draw)
             .await?
-            .map_err(RepositoryOrExperimentError::from)
+            .map_err(RepositoryError::from)
     }
 
     pub async fn update_experiment(
@@ -218,7 +206,7 @@ impl Repository {
         timestamp: f64,
         arm_id: usize,
         reward: f64,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    ) -> Result<(), RepositoryError> {
         self.send_to_experiment(
             experiment_id,
             Update {
@@ -228,25 +216,25 @@ impl Repository {
             },
         )
         .await?
-        .map_err(RepositoryOrExperimentError::from)
+        .map_err(RepositoryError::from)
     }
 
     pub async fn batch_update_experiment(
         &self,
         experiment_id: Uuid,
         updates: Vec<BatchUpdateElement>,
-    ) -> Result<(), RepositoryOrExperimentError> {
+    ) -> Result<(), RepositoryError> {
         self.send_to_experiment(experiment_id, UpdateBatch { updates })
             .await?
-            .map_err(RepositoryOrExperimentError::from)
+            .map_err(RepositoryError::from)
     }
 
     pub async fn get_experiment_stats(
         &self,
         experiment_id: Uuid,
-    ) -> Result<PolicyStats, RepositoryOrExperimentError> {
+    ) -> Result<PolicyStats, RepositoryError> {
         self.send_to_experiment(experiment_id, GetStats)
             .await?
-            .map_err(RepositoryOrExperimentError::from)
+            .map_err(RepositoryError::from)
     }
 }
