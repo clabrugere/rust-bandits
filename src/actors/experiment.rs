@@ -83,9 +83,6 @@ impl Actor for Experiment {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        self.state_store.do_send(DeleteState {
-            experiment_id: self.id,
-        });
         info!(id = %self.id, "Stopped actor for experiment");
     }
 }
@@ -99,7 +96,7 @@ pub struct Ping;
 
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentError>")]
-pub struct Stop;
+pub struct Delete;
 
 #[derive(Message)]
 #[rtype(result = "Result<(), ExperimentError>")]
@@ -163,10 +160,13 @@ impl Handler<Ping> for Experiment {
     fn handle(&mut self, _: Ping, _: &mut Self::Context) -> Self::Result {}
 }
 
-impl Handler<Stop> for Experiment {
+impl Handler<Delete> for Experiment {
     type Result = Result<(), ExperimentError>;
 
-    fn handle(&mut self, _: Stop, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: Delete, ctx: &mut Self::Context) -> Self::Result {
+        self.state_store.do_send(DeleteState {
+            experiment_id: self.id,
+        });
         ctx.stop();
         Ok(())
     }

@@ -3,7 +3,7 @@ use super::actors::state_store::{LoadAllStates, StateStore};
 use super::errors::RepositoryError;
 
 use crate::actors::experiment::{
-    AddArm, DeleteArm, DisableArm, Draw, EnableArm, GetStats, Ping, Reset, Stop, Update,
+    AddArm, Delete, DeleteArm, DisableArm, Draw, EnableArm, GetStats, Ping, Reset, Update,
     UpdateBatch,
 };
 use crate::config::ExperimentConfig;
@@ -118,7 +118,7 @@ impl Repository {
     }
 
     pub async fn delete_experiment(&mut self, experiment_id: Uuid) -> Result<(), RepositoryError> {
-        self.get_experiment_address(experiment_id)?.do_send(Stop);
+        self.get_experiment_address(experiment_id)?.do_send(Delete);
         self.experiments.remove(&experiment_id);
         Ok(())
     }
