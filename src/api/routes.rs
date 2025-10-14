@@ -24,14 +24,15 @@ async fn ping() -> Result<impl Responder> {
 
 #[get("list")]
 async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
-    let response = repository
+    let experiments = repository
         .read()
         .await
-        .list_experiments()
-        .map(|experiments| Json(ListExperimentsResponse { experiments }))
-        .map_err(ApiError::from)?;
+        .iter_experiments()
+        .map_err(ApiError::from)?
+        .map(|(id, policy_type)| (*id, policy_type.clone()))
+        .collect();
 
-    Ok(response)
+    Ok(Json(ListExperimentsResponse { experiments }))
 }
 
 #[delete("clear")]

@@ -80,12 +80,13 @@ impl Repository {
         self.send_to_experiment(experiment_id, Ping).await
     }
 
-    pub fn list_experiments(&self) -> Result<HashMap<Uuid, PolicyType>, RepositoryError> {
+    pub fn iter_experiments(
+        &self,
+    ) -> Result<impl Iterator<Item = (&Uuid, &PolicyType)>, RepositoryError> {
         Ok(self
             .experiments
             .iter()
-            .map(|(&id, el)| (id, el.policy_type.clone()))
-            .collect())
+            .map(|(id, el)| (id, &el.policy_type)))
     }
 
     pub fn clear(&mut self) {
