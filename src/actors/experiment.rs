@@ -62,7 +62,7 @@ impl Actor for Experiment {
 
             ctx.spawn(
                 async move {
-                    match state_store.clone().send(LoadState { experiment_id }).await {
+                    match state_store.send(LoadState { experiment_id }).await {
                         Ok(Some(policy)) => Some(policy),
                         _ => None,
                     }
