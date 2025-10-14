@@ -40,9 +40,8 @@ impl Repository {
             .await
             .map(|experiments| {
                 info!(num_experiments = %experiments.len(), "Loaded experiments");
-
-                experiments.iter().for_each(|(&experiment_id, policy)| {
-                    self.create_experiment(Some(experiment_id), policy.clone_box());
+                experiments.into_iter().for_each(|(experiment_id, policy)| {
+                    self.create_experiment(Some(experiment_id), policy);
                     info!(id = %experiment_id, "Loaded experiment");
                 });
             })
