@@ -28,7 +28,6 @@ async fn list(repository: Data<RwLock<Repository>>) -> Result<impl Responder> {
         .read()
         .await
         .iter_experiments()
-        .map_err(ApiError::from)?
         .map(|(id, policy_type)| (*id, policy_type.clone()))
         .collect();
 

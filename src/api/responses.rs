@@ -1,5 +1,5 @@
 use crate::actors::accountant::{Accountant, LogResponse};
-use crate::errors::ApiError;
+use crate::errors::{ApiError, ServiceError};
 use crate::policies::{DrawResult, PolicyType};
 
 use actix::Addr;
@@ -44,7 +44,8 @@ pub async fn log_response(
                 response: LoggedResponse::new(request_id, &path, status.as_u16()),
             })
         })
-        .ok_or(ApiError::AccountantUnavailable)?;
+        .ok_or(ServiceError::Accountant)
+        .map_err(ApiError::from)?;
 
     Ok(response)
 }

@@ -1,3 +1,4 @@
+use actix::MailboxError;
 use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use serde::Serialize;
 use thiserror::Error;
@@ -15,22 +16,18 @@ pub enum PolicyError {
 
 #[derive(Debug, Error)]
 pub enum ExperimentError {
-    #[error("Policy error: {0}")]
-    PolicyError(#[from] PolicyError),
     #[error("No policy defined for experiment")]
     NoPolicy,
+    #[error("Policy error: {0}")]
+    PolicyError(#[from] PolicyError),
 }
 
 #[derive(Debug, Error)]
 pub enum RepositoryError {
-    #[error("Experiment error: {0}")]
-    Experiment(#[from] ExperimentError),
-    #[error("Experiment {0} not available")]
-    ExperimentUnavailable(Uuid),
     #[error("Experiment {0} not found")]
     ExperimentNotFound(Uuid),
-    #[error("Storage not available")]
-    StorageUnavailable,
+    #[error("Experiment error: {0}")]
+    Experiment(#[from] ExperimentError),
 }
 
 #[derive(Debug, Error)]
@@ -42,15 +39,27 @@ pub enum PersistenceError {
 }
 
 #[derive(Debug, Error)]
-pub enum ApiError {
-    #[error("Invalid UUID format: {0}")]
-    InvalidUuid(#[from] uuid::Error),
-    #[error("Invalid experiment or policy request: {0}")]
+pub enum ServiceError {
+    #[error("Mailbox error from {actor}: {source}")]
+    Mailbox {
+        actor: &'static str,
+        #[source]
+        source: MailboxError,
+    },
+    #[error("Repository error: {0}")]
     Repository(#[from] RepositoryError),
-    #[error("Persistence failure: {0}")]
+    #[error("Persitence error: {0}")]
     Persistence(#[from] PersistenceError),
-    #[error("Accountant service unavailable")]
-    AccountantUnavailable,
+    #[error("No accountant defined")]
+    Accountant,
+}
+
+#[derive(Debug, Error)]
+pub enum ApiError {
+    #[error("Invalid UUID: {0}")]
+    InvalidUuid(#[from] uuid::Error),
+    #[error("Service error: {0}")]
+    Service(#[from] ServiceError),
 }
 
 #[derive(Debug, Serialize)]
@@ -64,9 +73,12 @@ impl ApiError {
     fn kind(&self) -> &'static str {
         match self {
             ApiError::InvalidUuid(_) => "InvalidUuid",
-            ApiError::Repository(_) => "InvalidRequest",
-            ApiError::Persistence(_) => "PersistenceError",
-            ApiError::AccountantUnavailable => "AccountantUnavailable",
+            ApiError::Service(err) => match err {
+                ServiceError::Mailbox { .. } => "MailboxError",
+                ServiceError::Repository(_) => "RepositoryError",
+                ServiceError::Persistence(_) => "PersistenceError",
+                ServiceError::Accountant => "AccountantError",
+            },
         }
     }
 }
@@ -75,14 +87,15 @@ impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
             ApiError::InvalidUuid(_) => StatusCode::BAD_REQUEST,
-            ApiError::Repository(error) => match error {
-                RepositoryError::ExperimentNotFound(_) => StatusCode::NOT_FOUND,
-                RepositoryError::ExperimentUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-                RepositoryError::StorageUnavailable => StatusCode::SERVICE_UNAVAILABLE,
-                RepositoryError::Experiment(_) => StatusCode::BAD_REQUEST,
+            ApiError::Service(service_err) => match service_err {
+                ServiceError::Mailbox { .. } => StatusCode::SERVICE_UNAVAILABLE,
+                ServiceError::Repository(repo_err) => match repo_err {
+                    RepositoryError::ExperimentNotFound(_) => StatusCode::NOT_FOUND,
+                    RepositoryError::Experiment(_) => StatusCode::BAD_REQUEST,
+                },
+                ServiceError::Persistence(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                ServiceError::Accountant => StatusCode::SERVICE_UNAVAILABLE,
             },
-            ApiError::Persistence(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            ApiError::AccountantUnavailable => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
