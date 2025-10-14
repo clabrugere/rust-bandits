@@ -62,6 +62,7 @@ pub struct EpsilonGreedy {
     arms: HashMap<usize, EpsilonGreedyArm>,
     epsilon: f64,
     epsilon_decay: Option<DecayType>,
+    active_pull_count: u64,
     rng: MaybeSeededRng,
 }
 
@@ -71,25 +72,20 @@ impl EpsilonGreedy {
             arms: HashMap::new(),
             epsilon,
             epsilon_decay,
+            active_pull_count: 0,
             rng: MaybeSeededRng::new(seed),
         }
     }
 
-    fn total_count(&self) -> u64 {
-        self.arms
-            .values()
-            .filter(|arm| arm.is_active)
-            .map(|arm| arm.count)
-            .sum()
-    }
-
     fn epsilon_with_decay(&self) -> f64 {
-        let total_count = self.total_count() as f64;
+        let active_pull_count = self.active_pull_count as f64;
         match self.epsilon_decay {
-            Some(DecayType::Exponential { decay }) => self.epsilon * (-decay * total_count).exp(),
-            Some(DecayType::Inverse { decay }) => self.epsilon / (1.0 + decay * total_count),
+            Some(DecayType::Exponential { decay }) => {
+                self.epsilon * (-decay * active_pull_count).exp()
+            }
+            Some(DecayType::Inverse { decay }) => self.epsilon / (1.0 + decay * active_pull_count),
             Some(DecayType::Linear { decay, min_epsilon }) => {
-                (self.epsilon - decay * total_count).max(min_epsilon)
+                (self.epsilon - decay * active_pull_count).max(min_epsilon)
             }
             None => self.epsilon,
         }
@@ -121,10 +117,17 @@ impl Policy for EpsilonGreedy {
         if let Some(arm_id) = arm_id {
             self.arms
                 .get_mut(&arm_id)
-                .map(|arm| arm.reset(cumulative_reward, count))
+                .map(|arm| {
+                    arm.reset(cumulative_reward, count);
+                    self.active_pull_count += count.unwrap_or_default();
+                })
                 .ok_or(PolicyError::ArmNotFound(arm_id))?;
         } else {
-            self.arms.values_mut().for_each(|arm| arm.reset(None, None));
+            // reset all arms
+            self.arms.values_mut().for_each(|arm| {
+                arm.reset(None, None);
+                self.active_pull_count = 0;
+            });
         }
         Ok(())
     }
@@ -133,6 +136,7 @@ impl Policy for EpsilonGreedy {
         let arm_id = self.arms.len();
         self.arms
             .insert(arm_id, EpsilonGreedyArm::new(cumulative_reward, count));
+        self.active_pull_count += count;
 
         arm_id
     }
@@ -140,21 +144,29 @@ impl Policy for EpsilonGreedy {
     fn disable_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
         self.arms
             .get_mut(&arm_id)
-            .map(|arm| arm.is_active = false)
+            .map(|arm| {
+                arm.is_active = false;
+                self.active_pull_count -= arm.count;
+            })
             .ok_or(PolicyError::ArmNotFound(arm_id))
     }
 
     fn enable_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
         self.arms
             .get_mut(&arm_id)
-            .map(|arm| arm.is_active = true)
+            .map(|arm| {
+                arm.is_active = true;
+                self.active_pull_count += arm.count;
+            })
             .ok_or(PolicyError::ArmNotFound(arm_id))
     }
 
     fn delete_arm(&mut self, arm_id: usize) -> Result<(), PolicyError> {
-        self.arms
+        let deleted_arm = self
+            .arms
             .remove(&arm_id)
             .ok_or(PolicyError::ArmNotFound(arm_id))?;
+        self.active_pull_count -= deleted_arm.count;
         Ok(())
     }
 
@@ -189,6 +201,7 @@ impl Policy for EpsilonGreedy {
             .get_mut(&arm_id)
             .ok_or(PolicyError::ArmNotFound(arm_id))?
             .update(reward, timestamp);
+        self.active_pull_count += 1;
 
         Ok(())
     }
