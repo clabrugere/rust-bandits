@@ -51,12 +51,10 @@ impl Repository {
     fn get_experiment_address(
         &self,
         experiment_id: Uuid,
-    ) -> Result<Addr<Experiment>, RepositoryError> {
-        // cloning the address of an actor is cheap
+    ) -> Result<&Addr<Experiment>, RepositoryError> {
         self.experiments
             .get(&experiment_id)
             .map(|e| &e.address)
-            .cloned()
             .ok_or(RepositoryError::ExperimentNotFound(experiment_id))
     }
 
