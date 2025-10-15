@@ -50,19 +50,19 @@ impl Actor for StateStore {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Starting StateStore actor");
+        info!("Starting StateStore");
         ctx.run_interval(
             Duration::from_secs(self.config.persist_every),
             |state_store, _| {
                 if let Err(err) = state_store.persist() {
-                    warn!(error = %err, "Failed to persist state store");
+                    warn!(error = %err, "Failed to persist state");
                 }
             },
         );
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        info!("Stopped StateStore Actor");
+        info!("Stopped StateStore");
     }
 }
 
