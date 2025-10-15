@@ -17,9 +17,15 @@ impl StateStore {
         let storage = File::open(&config.path)
             .map(|file| {
                 let reader = BufReader::new(file);
-                serde_json::from_reader(reader).unwrap_or_default()
+                serde_json::from_reader(reader).unwrap_or_else(|err| {
+                    warn!(error = %err, "Starting with empty store");
+                    HashMap::new()
+                })
             })
-            .unwrap_or_default();
+            .unwrap_or_else(|err| {
+                warn!(error = %err, "Starting with empty store");
+                HashMap::new()
+            });
 
         Self { storage, config }
     }
@@ -44,7 +50,7 @@ impl Actor for StateStore {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!("Starting experiment StateStore actor");
+        info!("Starting StateStore actor");
         ctx.run_interval(
             Duration::from_secs(self.config.persist_every),
             |state_store, _| {
@@ -53,6 +59,10 @@ impl Actor for StateStore {
                 }
             },
         );
+    }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        info!("Stopped StateStore Actor");
     }
 }
 

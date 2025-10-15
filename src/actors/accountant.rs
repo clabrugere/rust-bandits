@@ -21,6 +21,10 @@ impl Actor for Accountant {
     fn started(&mut self, _: &mut Self::Context) {
         info!("Starting Accountant actor");
     }
+
+    fn stopped(&mut self, _: &mut Self::Context) {
+        info!("Stopped Accountant Actor");
+    }
 }
 
 // Messages

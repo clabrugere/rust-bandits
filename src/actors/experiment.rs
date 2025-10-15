@@ -54,7 +54,7 @@ impl Actor for Experiment {
     type Context = Context<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        info!(id = %self.id, "Starting actor for experiment");
+        info!(id = %self.id, "Starting Experiment actor");
 
         if self.policy.is_none() {
             let experiment_id = self.id;
@@ -83,7 +83,7 @@ impl Actor for Experiment {
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
-        info!(id = %self.id, "Stopped actor for experiment");
+        info!(id = %self.id, "Stopped Experiment Actor");
     }
 }
 
