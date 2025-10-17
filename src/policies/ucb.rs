@@ -195,6 +195,7 @@ impl Policy for Ucb {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     const ALPHA: f64 = 1.0;
     const DEFAULT_SEED: Option<u64> = Some(1234);
 

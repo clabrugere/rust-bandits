@@ -229,6 +229,7 @@ impl Policy for ThomsonSampling {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     const DEFAULT_SEED: Option<u64> = Some(1234);
 
     fn make_policy() -> ThomsonSampling {

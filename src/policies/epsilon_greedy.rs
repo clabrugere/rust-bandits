@@ -226,6 +226,7 @@ impl Policy for EpsilonGreedy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     const EPSILON: f64 = 0.1;
     const DEFAULT_SEED: Option<u64> = Some(1234);
 
