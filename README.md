@@ -64,22 +64,26 @@ curl --request GET --url http://127.0.0.1:8080/ping
 
 ## API endpoints
 
-The system currently exposes 12 routes:
+The system currently exposes 16 routes:
 
-| Request 	| Response 	| Description 	|
-|---	|---	|---	|
-| `GET v1/ping` 	|  	| send a ping request to the server 	|
-| `GET v1/list` 	| `{"experiment_ids": [...]}` 	| return the id of all available experiments 	|
-| `DELETE v1/clear` 	|  	| delete all experiments 	|
-| `POST v1/create` 	| `{"experiment_id": ...}` 	| create a new experiment and return its unique id 	|
-| `PUT v1/{experiment_id}/reset` 	|  	| reset the state of the experiment 	|
-| `DELETE v1/{experiment_id}/delete` 	|  	| delete an experiment 	|
-| `POST v1/{experiment_id}/add_arm` 	| `{"arm_id" : ...}` 	| create a new variant for a given experiment and return its id 	|
-| `DELETE v1/{experiment_id}/delete_arm/{arm_id}` 	|  	| delete a given variant for a given experiment 	|
-| `GET v1/{experiment_id}/draw` 	| `{"arm_id" : ...}` 	| get the current best performing variant of an experiment 	|
-| `POST v1/{experiment_id}/update` 	|  	| update an experiment by sending a json with structure `{"ts": ...,"arm_id": ...,"reward":...}` 	|
-| `POST v1/{experiment_id}/update_batch` 	|  	| send multiple updates for an experiment, with structure `{"updates": [...]}` 	|
-| `GET v1/{experiment_id}/stats` 	| `{"arms": {"arm_id": {"pulls": ..., "mean_reward": ...}, ...}}` 	| return some basic stats for a given experiment 	|
+| Request 	| Payload 	| Response 	| Description 	|
+|---	|---	|---	|---	|
+| `GET v1/ping` 	| `-` 	|  	| send a ping request to the server 	|
+| `GET v1/list` 	| `-` 	| `{"experiments": {"<experiment_id>": {"type": "...", ...}, ...}}` 	| return every experiment id with its configured policy 	|
+| `DELETE v1/clear` 	| `-` 	|  	| delete all experiments 	|
+| `POST v1/create` 	| `{"EpsilonGreedy": {"epsilon": 0.1, "epsilon_decay": null, "seed": null}}` 	| `{"experiment_id": ...}` 	| create a new experiment and return its unique id 	|
+| `GET v1/{experiment_id}/ping` 	| `-` 	|  	| ping a specific experiment actor 	|
+| `PUT v1/{experiment_id}/reset` 	| `-` 	|  	| reset the state of the experiment 	|
+| `POST v1/{experiment_id}/{arm_id}/reset` 	| `{"cumulative_reward": 0.0, "count": 0}` 	|  	| reset a single arm for an experiment 	|
+| `DELETE v1/{experiment_id}/delete` 	| `-` 	|  	| delete an experiment 	|
+| `POST v1/{experiment_id}/add_arm` 	| `{"initial_reward": 1.0, "initial_count": 10}` 	| `{"arm_id": ...}` 	| create a new variant for a given experiment and return its id 	|
+| `PUT v1/{experiment_id}/{arm_id}/disable` 	| `-` 	|  	| disable a specific arm so it is excluded from draws 	|
+| `PUT v1/{experiment_id}/{arm_id}/enable` 	| `-` 	|  	| re-enable a previously disabled arm 	|
+| `DELETE v1/{experiment_id}/{arm_id}/delete` 	| `-` 	|  	| delete a given variant for a given experiment 	|
+| `GET v1/{experiment_id}/draw` 	| `-` 	| `{"timestamp": ..., "arm_id": ...}` 	| get the current best performing variant of an experiment 	|
+| `PUT v1/{experiment_id}/update` 	| `{"timestamp": 1700000000.0, "arm_id": 1, "reward": 1.0}` 	|  	| update an experiment with a single event 	|
+| `PUT v1/{experiment_id}/update_batch` 	| `{"updates": [{"timestamp": 1700000000.0, "arm_id": 1, "reward": 1.0}]}` 	|  	| send multiple updates at once 	|
+| `GET v1/{experiment_id}/stats` 	| `-` 	| `{"arms": {"<arm_id>": {"pulls": ..., "mean_reward": ..., "is_active": ...}, ...}}` 	| return stats for each arm of a given experiment 	|
 
 ## Roadmap
 
