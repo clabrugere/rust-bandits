@@ -230,11 +230,15 @@ impl Policy for ThomsonSampling {
 mod tests {
     use super::*;
 
-    const SEED: u64 = 1234;
+    const DEFAULT_SEED: Option<u64> = Some(1234);
+
+    fn make_policy() -> ThomsonSampling {
+        ThomsonSampling::new(None, DEFAULT_SEED)
+    }
 
     #[test]
     fn create_arm() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         assert!(policy.arms.len() == 0);
 
         let arm_id = policy.add_arm(0.0, 0);
@@ -243,7 +247,7 @@ mod tests {
 
     #[test]
     fn disable_arm() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let arm_id = policy.add_arm(0.0, 0);
 
         assert!(policy.disable_arm(arm_id).is_ok());
@@ -255,7 +259,7 @@ mod tests {
 
     #[test]
     fn enable_arm() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let arm_id = policy.add_arm(0.0, 0);
 
         assert!(policy.disable_arm(arm_id).is_ok());
@@ -272,7 +276,7 @@ mod tests {
 
     #[test]
     fn delete_arm() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let arm_id = policy.add_arm(0.0, 0);
         assert!(policy.delete_arm(arm_id).is_ok());
         assert!(!policy.arms.contains_key(&arm_id));
@@ -281,7 +285,7 @@ mod tests {
 
     #[test]
     fn draw() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let arm_id = policy.add_arm(0.0, 0);
         let result = policy.draw().ok().map(|DrawResult { arm_id, .. }| arm_id);
         assert_eq!(result, Some(arm_id));
@@ -289,7 +293,7 @@ mod tests {
 
     #[test]
     fn draw_best() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let arm_1 = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -300,13 +304,13 @@ mod tests {
 
     #[test]
     fn draw_empty() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         assert!(policy.draw().is_err());
     }
 
     #[test]
     fn update() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 
@@ -322,7 +326,7 @@ mod tests {
 
     #[test]
     fn update_batch() {
-        let mut policy = ThomsonSampling::new(None, Some(SEED));
+        let mut policy = make_policy();
         let _ = policy.add_arm(0.0, 0);
         let _ = policy.add_arm(0.0, 0);
 

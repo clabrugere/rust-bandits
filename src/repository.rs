@@ -243,3 +243,228 @@ impl Repository {
             .map_err(ServiceError::from)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::actors::state_store::SaveState;
+    use crate::config::{ExperimentConfig, StateStoreConfig};
+    use crate::errors::{RepositoryError, ServiceError};
+    use crate::policies::{Policy, PolicyType};
+
+    use std::fs;
+    use std::path::PathBuf;
+    use uuid::Uuid;
+
+    const EPSILON: f64 = 0.01;
+    const DEFAULT_SEED: Option<u64> = Some(1234);
+
+    fn make_policy() -> Box<dyn Policy + Send> {
+        PolicyType::EpsilonGreedy {
+            epsilon: EPSILON,
+            epsilon_decay: None,
+            seed: DEFAULT_SEED,
+        }
+        .into_inner()
+    }
+
+    struct TestContext {
+        repository: Repository,
+        state_store: Addr<StateStore>,
+        state_path: PathBuf,
+    }
+
+    impl TestContext {
+        fn new() -> Self {
+            let state_path =
+                std::env::temp_dir().join(format!("state-store-{}.json", Uuid::new_v4()));
+            let state_store_config = StateStoreConfig {
+                path: state_path.clone(),
+                persist_every: 86_400,
+            };
+            let state_store = StateStore::new(state_store_config).start();
+            let experiment_config = ExperimentConfig { save_every: 86_400 };
+            let repository = Repository::new(experiment_config, state_store.clone());
+
+            Self {
+                repository,
+                state_store,
+                state_path,
+            }
+        }
+    }
+
+    impl Drop for TestContext {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.state_path);
+        }
+    }
+
+    #[actix::test]
+    async fn create_and_ping_experiment() {
+        let mut ctx = TestContext::new();
+        let experiment_id = ctx.repository.create_experiment(None, make_policy());
+
+        ctx.repository
+            .ping_experiment(experiment_id)
+            .await
+            .expect("experiment should respond to ping");
+
+        assert!(ctx
+            .repository
+            .iter_experiments()
+            .any(|(id, policy)| {
+                *id == experiment_id
+                    && matches!(policy, PolicyType::EpsilonGreedy { epsilon, .. } if *epsilon == EPSILON)
+            }));
+    }
+
+    #[actix::test]
+    async fn manages_arm_lifecycle() {
+        let mut ctx = TestContext::new();
+        let experiment_id = ctx.repository.create_experiment(None, make_policy());
+
+        let arm_id = ctx
+            .repository
+            .add_experiment_arm(experiment_id, Some(1.0), Some(1))
+            .await
+            .expect("arm creation should succeed");
+
+        let mut stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats should be available");
+        let arm_stats = stats.arms.get(&arm_id).expect("arm should exist");
+        assert_eq!(arm_stats.pulls, 1);
+        assert!(arm_stats.is_active);
+
+        ctx.repository
+            .disable_experiment_arm(experiment_id, arm_id)
+            .await
+            .expect("disable should succeed");
+        stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats after disable");
+        assert!(!stats.arms[&arm_id].is_active);
+
+        ctx.repository
+            .enable_experiment_arm(experiment_id, arm_id)
+            .await
+            .expect("enable should succeed");
+        stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats after enable");
+        assert!(stats.arms[&arm_id].is_active);
+
+        let draw = ctx
+            .repository
+            .draw_experiment(experiment_id)
+            .await
+            .expect("draw should succeed");
+        assert_eq!(draw.arm_id, arm_id);
+
+        ctx.repository
+            .update_experiment(experiment_id, 42.0, arm_id, 2.0)
+            .await
+            .expect("update should succeed");
+        ctx.repository
+            .batch_update_experiment(experiment_id, vec![(1.0, arm_id, 3.0), (2.0, arm_id, 1.0)])
+            .await
+            .expect("batch update should succeed");
+
+        stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats after updates");
+        assert_eq!(stats.arms[&arm_id].pulls, 4);
+        assert!((stats.arms[&arm_id].mean_reward - 1.75).abs() < 1e-6);
+
+        ctx.repository
+            .reset_experiment(experiment_id, Some(arm_id), Some(0.0), Some(0))
+            .await
+            .expect("reset should succeed");
+        stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats after reset");
+        let arm_stats = stats.arms.get(&arm_id).expect("arm present after reset");
+        assert_eq!(arm_stats.pulls, 0);
+        assert_eq!(arm_stats.mean_reward, 0.0);
+
+        ctx.repository
+            .delete_experiment_arm(experiment_id, arm_id)
+            .await
+            .expect("delete arm should succeed");
+        stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats after delete");
+        assert!(stats.arms.get(&arm_id).is_none());
+
+        ctx.repository
+            .delete_experiment(experiment_id)
+            .await
+            .expect("delete experiment should succeed");
+        assert!(!ctx
+            .repository
+            .iter_experiments()
+            .any(|(id, _)| *id == experiment_id));
+
+        let err = ctx
+            .repository
+            .ping_experiment(experiment_id)
+            .await
+            .expect_err("ping should fail after deletion");
+        match err {
+            ServiceError::Repository(RepositoryError::ExperimentNotFound(id)) => {
+                assert_eq!(id, experiment_id)
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[actix::test]
+    async fn loads_experiments_from_state_store() {
+        let mut ctx = TestContext::new();
+        let experiment_id = Uuid::new_v4();
+
+        let mut saved_policy = make_policy();
+        saved_policy.add_arm(5.0, 2);
+
+        ctx.state_store
+            .send(SaveState {
+                experiment_id,
+                policy: saved_policy,
+            })
+            .await
+            .expect("state should be saved");
+
+        ctx.repository
+            .load_experiments()
+            .await
+            .expect("loading from state store should succeed");
+
+        assert!(ctx
+            .repository
+            .iter_experiments()
+            .any(|(id, _)| *id == experiment_id));
+
+        let stats = ctx
+            .repository
+            .get_experiment_stats(experiment_id)
+            .await
+            .expect("stats should be retrievable");
+        assert_eq!(stats.arms.len(), 1);
+        let arm = stats.arms.values().next().expect("arm data present");
+        assert_eq!(arm.pulls, 2);
+        assert_eq!(arm.mean_reward, 5.0);
+    }
+}
