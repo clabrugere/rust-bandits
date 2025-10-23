@@ -1,4 +1,4 @@
-# rust-bandits (WIP)
+# rust-bandits
 
 ## About
 
