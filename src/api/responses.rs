@@ -42,7 +42,7 @@ pub async fn log_response(
         .map(|addr| {
             addr.do_send(LogResponse {
                 response: LoggedResponse::new(request_id, &path, status.as_u16()),
-            })
+            });
         })
         .ok_or(ServiceError::Accountant)
         .map_err(ApiError::from)?;

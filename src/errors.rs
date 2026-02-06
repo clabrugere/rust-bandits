@@ -72,8 +72,8 @@ struct ErrorBody {
 impl ApiError {
     fn kind(&self) -> &'static str {
         match self {
-            ApiError::InvalidUuid(_) => "InvalidUuid",
-            ApiError::Service(err) => match err {
+            Self::InvalidUuid(_) => "InvalidUuid",
+            Self::Service(err) => match err {
                 ServiceError::Mailbox { .. } => "MailboxError",
                 ServiceError::Repository(_) => "RepositoryError",
                 ServiceError::Persistence(_) => "PersistenceError",
@@ -86,15 +86,16 @@ impl ApiError {
 impl ResponseError for ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
-            ApiError::InvalidUuid(_) => StatusCode::BAD_REQUEST,
-            ApiError::Service(service_err) => match service_err {
-                ServiceError::Mailbox { .. } => StatusCode::SERVICE_UNAVAILABLE,
+            Self::InvalidUuid(_) => StatusCode::BAD_REQUEST,
+            Self::Service(service_err) => match service_err {
+                ServiceError::Mailbox { .. } | ServiceError::Accountant => {
+                    StatusCode::SERVICE_UNAVAILABLE
+                }
                 ServiceError::Repository(repo_err) => match repo_err {
                     RepositoryError::ExperimentNotFound(_) => StatusCode::NOT_FOUND,
                     RepositoryError::Experiment(_) => StatusCode::BAD_REQUEST,
                 },
                 ServiceError::Persistence(_) => StatusCode::INTERNAL_SERVER_ERROR,
-                ServiceError::Accountant => StatusCode::SERVICE_UNAVAILABLE,
             },
         }
     }

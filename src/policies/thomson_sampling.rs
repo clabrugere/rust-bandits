@@ -52,12 +52,10 @@ impl ThomsonSamplingArm {
 
     // apply an exponential decay d = exp(dt * ln2 / h)
     fn decay_weight(&self, timestamp: f64) -> f64 {
-        if let Some(h) = self.halflife_seconds {
+        self.halflife_seconds.map_or(1.0, |h| {
             let dt = timestamp - self.last_ts;
             (-dt * std::f64::consts::LN_2 / h).exp()
-        } else {
-            1.0
-        }
+        })
     }
 
     fn apply_discount(&mut self, timestamp: f64) {
@@ -188,9 +186,9 @@ impl Policy for ThomsonSampling {
             .arms
             .iter()
             .filter(|(_, arm)| arm.is_active)
-            .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
-                Ok(sample) => Some((arm_id, sample)),
-                Err(_) => None,
+            .filter_map(|(arm_id, arm)| {
+                arm.sample(self.rng.get_rng())
+                    .map_or(None, |sample| Some((arm_id, sample)))
             })
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
             .map(|(&arm_id, _)| arm_id)

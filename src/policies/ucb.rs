@@ -27,8 +27,8 @@ impl UcbArm {
         }
     }
 
-    fn sample(&self, alpha: f64, total_count: u64) -> Result<f64, PolicyError> {
-        Ok(self.reward + (alpha * (total_count as f64).ln() / (2.0 * (self.count as f64))))
+    fn sample(&self, alpha: f64, total_count: u64) -> f64 {
+        self.reward + (alpha * (total_count as f64).ln() / (2.0 * (self.count as f64)))
     }
     fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
         self.reward = cumulative_reward.unwrap_or_default();
@@ -151,12 +151,7 @@ impl Policy for Ucb {
             self.arms
                 .iter()
                 .filter(|(_, arm)| arm.is_active)
-                .filter_map(
-                    |(arm_id, arm)| match arm.sample(self.alpha, self.total_count()) {
-                        Ok(sample) => Some((arm_id, sample)),
-                        Err(_) => None,
-                    },
-                )
+                .map(|(arm_id, arm)| (arm_id, arm.sample(self.alpha, self.total_count())))
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                 .map(|(&arm_id, _)| arm_id)
                 .ok_or(PolicyError::NoArmsAvailable)

@@ -66,7 +66,7 @@ async fn ping_experiment(
         .await
         .ping_experiment(experiment_id)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -80,7 +80,7 @@ async fn reset(repository: Data<RwLock<Repository>>, path: Path<String>) -> Resu
         .await
         .reset_experiment(experiment_id, None, None, None)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -103,7 +103,7 @@ async fn reset_arm(
         .await
         .reset_experiment(experiment_id, Some(arm_id), cumulative_reward, count)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -119,8 +119,7 @@ async fn delete_experiment(
         .write()
         .await
         .delete_experiment(experiment_id)
-        .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -159,7 +158,7 @@ async fn disable_arm(
         .await
         .disable_experiment_arm(experiment_id, arm_id)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -177,7 +176,7 @@ async fn enable_arm(
         .await
         .enable_experiment_arm(experiment_id, arm_id)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -195,7 +194,7 @@ async fn delete_arm(
         .await
         .delete_experiment_arm(experiment_id, arm_id)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -231,7 +230,7 @@ async fn update(
         .await
         .update_experiment(experiment_id, timestamp, arm_id, reward)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)
@@ -256,7 +255,7 @@ async fn update_batch(
         .await
         .batch_update_experiment(experiment_id, updates)
         .await
-        .map(|_| HttpResponse::Ok())
+        .map(|()| HttpResponse::Ok())
         .map_err(ApiError::from)?;
 
     Ok(response)

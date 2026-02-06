@@ -38,10 +38,10 @@ impl Repository {
             .await
             .map(|experiments| {
                 info!(num_experiments = %experiments.len(), "Loaded experiments");
-                experiments.into_iter().for_each(|(experiment_id, policy)| {
+                for (experiment_id, policy) in experiments {
                     self.create_experiment(Some(experiment_id), policy);
                     info!(id = %experiment_id, "Loaded experiment");
-                });
+                }
             })
             .map_err(|err| ServiceError::Mailbox {
                 actor: "StateStore",
@@ -97,7 +97,7 @@ impl Repository {
         experiment_id: Option<Uuid>,
         policy: Box<dyn Policy + Send>,
     ) -> Uuid {
-        let experiment_id = experiment_id.unwrap_or(Uuid::new_v4());
+        let experiment_id = experiment_id.unwrap_or_else(Uuid::new_v4);
         let policy_type = policy.policy_type();
         // use a Supervisor to handle auto restart of crashed experiments
         let address = Supervisor::start({
@@ -118,7 +118,7 @@ impl Repository {
         experiment_id
     }
 
-    pub async fn delete_experiment(&mut self, experiment_id: Uuid) -> Result<(), ServiceError> {
+    pub fn delete_experiment(&mut self, experiment_id: Uuid) -> Result<(), ServiceError> {
         self.get_experiment_address(experiment_id)?.do_send(Delete);
         self.experiments.remove(&experiment_id);
         Ok(())
@@ -411,7 +411,6 @@ mod tests {
 
         ctx.repository
             .delete_experiment(experiment_id)
-            .await
             .expect("delete experiment should succeed");
         assert!(!ctx
             .repository

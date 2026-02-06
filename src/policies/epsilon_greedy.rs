@@ -32,8 +32,8 @@ impl EpsilonGreedyArm {
         self.count = count.unwrap_or_default();
     }
 
-    fn sample<R: Rng + ?Sized>(&self, _: &mut R) -> Result<f64, PolicyError> {
-        Ok(self.reward)
+    fn sample<R: Rng + ?Sized>(&self, _: &mut R) -> f64 {
+        self.reward
     }
 
     fn update(&mut self, reward: f64, _: f64) {
@@ -83,10 +83,12 @@ impl EpsilonGreedy {
             Some(DecayType::Exponential { decay }) => {
                 self.epsilon * (-decay * active_pull_count).exp()
             }
-            Some(DecayType::Inverse { decay }) => self.epsilon / (1.0 + decay * active_pull_count),
-            Some(DecayType::Linear { decay, min_epsilon }) => {
-                (self.epsilon - decay * active_pull_count).max(min_epsilon)
+            Some(DecayType::Inverse { decay }) => {
+                self.epsilon / decay.mul_add(active_pull_count, 1.0)
             }
+            Some(DecayType::Linear { decay, min_epsilon }) => decay
+                .mul_add(-active_pull_count, self.epsilon)
+                .max(min_epsilon),
             None => self.epsilon,
         }
     }
@@ -183,10 +185,7 @@ impl Policy for EpsilonGreedy {
                 .ok_or(PolicyError::NoArmsAvailable)
         } else {
             arm_iterator
-                .filter_map(|(arm_id, arm)| match arm.sample(self.rng.get_rng()) {
-                    Ok(sample) => Some((arm_id, sample)),
-                    Err(_) => None,
-                })
+                .map(|(arm_id, arm)| (arm_id, arm.sample(self.rng.get_rng())))
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                 .map(|(&arm_id, _)| arm_id)
                 .ok_or(PolicyError::NoArmsAvailable)

@@ -50,16 +50,16 @@ pub enum PolicyType {
 impl PolicyType {
     pub fn into_inner(self) -> Box<dyn Policy + Send> {
         match self {
-            PolicyType::EpsilonGreedy {
+            Self::EpsilonGreedy {
                 epsilon,
                 epsilon_decay,
                 seed,
             } => Box::new(EpsilonGreedy::new(epsilon, epsilon_decay, seed)),
-            PolicyType::ThomsonSampling {
+            Self::ThomsonSampling {
                 halflife_seconds,
                 seed,
             } => Box::new(ThomsonSampling::new(halflife_seconds, seed)),
-            PolicyType::Ucb { alpha, seed } => Box::new(Ucb::new(alpha, seed)),
+            Self::Ucb { alpha, seed } => Box::new(Ucb::new(alpha, seed)),
         }
     }
 }

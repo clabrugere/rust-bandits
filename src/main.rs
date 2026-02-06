@@ -48,14 +48,14 @@ async fn main() -> Result<(), Error> {
 
     // Reload all existing policies
     match repository.write().await.load_experiments().await {
-        Ok(_) => (),
+        Ok(()) => (),
         Err(err) => {
             warn!(
                 "Could not initialize experiment repository: {}",
                 err.to_string()
             );
         }
-    };
+    }
 
     HttpServer::new(move || {
         App::new()

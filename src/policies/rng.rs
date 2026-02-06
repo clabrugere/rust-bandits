@@ -15,11 +15,10 @@ fn default_rng() -> SmallRng {
 
 impl MaybeSeededRng {
     pub fn new(seed: Option<u64>) -> Self {
-        let rng = match seed {
-            Some(seed) => SmallRng::seed_from_u64(seed),
-            None => SmallRng::from_os_rng(),
-        };
-        Self { seed, rng }
+        Self {
+            seed,
+            rng: seed.map_or_else(SmallRng::from_os_rng, |seed| SmallRng::seed_from_u64(seed)),
+        }
     }
 
     pub fn get_rng(&mut self) -> &mut SmallRng {
