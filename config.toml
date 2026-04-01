@@ -6,8 +6,7 @@ port = "8080"
 [accountant]
 
 [state_store]
-path = "./state_store"
-persist_every = "60"
+dir = "./state_store"
 
 [experiment]
 save_every = "60"

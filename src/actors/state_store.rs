@@ -1,65 +1,33 @@
 use crate::config::StateStoreConfig;
-use crate::errors::PersistenceError;
 use crate::policies::Policy;
 
 use actix::prelude::*;
-use std::{collections::HashMap, fs::File, io::BufReader, time::Duration};
+use std::{collections::HashMap, fs, io::BufReader, path::PathBuf};
 use tracing::{info, warn};
 use uuid::Uuid;
 
 pub struct StateStore {
-    storage: HashMap<Uuid, Box<dyn Policy + Send>>,
     config: StateStoreConfig,
 }
 
 impl StateStore {
     pub fn new(config: StateStoreConfig) -> Self {
-        let storage = File::open(&config.path).map_or_else(
-            |err| {
-                warn!(error = %err, "Starting with empty store");
-                HashMap::new()
-            },
-            |file| {
-                let reader = BufReader::new(file);
-                serde_json::from_reader(reader).unwrap_or_else(|err| {
-                    warn!(error = %err, "Starting with empty store");
-                    HashMap::new()
-                })
-            },
-        );
-
-        Self { storage, config }
+        if let Err(err) = fs::create_dir_all(&config.dir) {
+            warn!(error = %err, path = ?config.dir, "Could not create state store directory");
+        }
+        Self { config }
     }
 
-    fn persist(&self) -> Result<(), PersistenceError> {
-        if self.storage.is_empty() {
-            return Ok(());
-        }
-
-        info!(
-            path = ?self.config.path,
-            "Persisting state store to"
-        );
-
-        let serialized = serde_json::to_string(&self.storage)?;
-        std::fs::write(&self.config.path, serialized)?;
-        Ok(())
+    fn path_for(&self, experiment_id: Uuid) -> PathBuf {
+        self.config.dir.join(format!("{experiment_id}.json"))
     }
 }
 
 impl Actor for StateStore {
     type Context = Context<Self>;
 
-    fn started(&mut self, ctx: &mut Self::Context) {
+    fn started(&mut self, _: &mut Self::Context) {
         info!("Starting StateStore");
-        ctx.run_interval(
-            Duration::from_secs(self.config.persist_every),
-            |state_store, _| {
-                if let Err(err) = state_store.persist() {
-                    warn!(error = %err, "Failed to persist state");
-                }
-            },
-        );
     }
 
     fn stopped(&mut self, _: &mut Self::Context) {
@@ -97,7 +65,17 @@ impl Handler<SaveState> for StateStore {
 
     fn handle(&mut self, msg: SaveState, _: &mut Self::Context) -> Self::Result {
         info!(id = %msg.experiment_id, "Saving state for experiment");
-        self.storage.insert(msg.experiment_id, msg.policy);
+        let path = self.path_for(msg.experiment_id);
+        match serde_json::to_string(&msg.policy) {
+            Ok(serialized) => {
+                if let Err(err) = fs::write(&path, serialized) {
+                    warn!(error = %err, id = %msg.experiment_id, "Failed to write experiment state");
+                }
+            }
+            Err(err) => {
+                warn!(error = %err, id = %msg.experiment_id, "Failed to serialize experiment state");
+            }
+        }
     }
 }
 
@@ -106,7 +84,12 @@ impl Handler<DeleteState> for StateStore {
 
     fn handle(&mut self, msg: DeleteState, _: &mut Self::Context) -> Self::Result {
         info!(id = %msg.experiment_id, "Deleting state for experiment");
-        self.storage.remove(&msg.experiment_id);
+        let path = self.path_for(msg.experiment_id);
+        if let Err(err) = fs::remove_file(&path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                warn!(error = %err, id = %msg.experiment_id, "Failed to delete experiment state");
+            }
+        }
     }
 }
 
@@ -114,7 +97,14 @@ impl Handler<LoadState> for StateStore {
     type Result = Option<Box<dyn Policy + Send>>;
 
     fn handle(&mut self, msg: LoadState, _: &mut Self::Context) -> Self::Result {
-        self.storage.get(&msg.experiment_id).cloned()
+        let path = self.path_for(msg.experiment_id);
+        let file = fs::File::open(&path).ok()?;
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader)
+            .map_err(
+                |err| warn!(error = %err, id = %msg.experiment_id, "Failed to deserialize state"),
+            )
+            .ok()
     }
 }
 
@@ -122,6 +112,43 @@ impl Handler<LoadAllStates> for StateStore {
     type Result = MessageResult<LoadAllStates>;
 
     fn handle(&mut self, _: LoadAllStates, _: &mut Self::Context) -> Self::Result {
-        MessageResult(self.storage.clone())
+        let mut states: HashMap<Uuid, Box<dyn Policy + Send>> = HashMap::new();
+
+        let entries = match fs::read_dir(&self.config.dir) {
+            Ok(e) => e,
+            Err(err) => {
+                warn!(error = %err, path = ?self.config.dir, "Failed to read state store directory");
+                return MessageResult(states);
+            }
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Ok(experiment_id) = Uuid::try_parse(stem) else {
+                warn!(path = ?path, "Skipping file with non-UUID name in state store directory");
+                continue;
+            };
+            match fs::File::open(&path).map(BufReader::new) {
+                Ok(reader) => match serde_json::from_reader(reader) {
+                    Ok(policy) => {
+                        states.insert(experiment_id, policy);
+                    }
+                    Err(err) => {
+                        warn!(error = %err, id = %experiment_id, "Failed to deserialize state");
+                    }
+                },
+                Err(err) => {
+                    warn!(error = %err, id = %experiment_id, "Failed to open state file");
+                }
+            }
+        }
+
+        MessageResult(states)
     }
 }

@@ -278,16 +278,15 @@ mod tests {
     struct TestContext {
         repository: Repository,
         state_store: Addr<StateStore>,
-        state_path: PathBuf,
+        state_dir: PathBuf,
     }
 
     impl TestContext {
         fn new() -> Self {
-            let state_path =
-                std::env::temp_dir().join(format!("state-store-{}.json", Uuid::new_v4()));
+            let state_dir =
+                std::env::temp_dir().join(format!("state-store-{}", Uuid::new_v4()));
             let state_store_config = StateStoreConfig {
-                path: state_path.clone(),
-                persist_every: 86_400,
+                dir: state_dir.clone(),
             };
             let state_store = StateStore::new(state_store_config).start();
             let experiment_config = ExperimentConfig { save_every: 86_400 };
@@ -296,14 +295,14 @@ mod tests {
             Self {
                 repository,
                 state_store,
-                state_path,
+                state_dir,
             }
         }
     }
 
     impl Drop for TestContext {
         fn drop(&mut self) {
-            let _ = fs::remove_file(&self.state_path);
+            let _ = fs::remove_dir_all(&self.state_dir);
         }
     }
 

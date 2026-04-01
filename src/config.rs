@@ -14,8 +14,7 @@ pub struct AccountantConfig {}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct StateStoreConfig {
-    pub path: PathBuf,
-    pub persist_every: u64,
+    pub dir: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
