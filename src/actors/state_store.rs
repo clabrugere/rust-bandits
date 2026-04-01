@@ -14,18 +14,19 @@ pub struct StateStore {
 
 impl StateStore {
     pub fn new(config: StateStoreConfig) -> Self {
-        let storage = File::open(&config.path)
-            .map(|file| {
+        let storage = File::open(&config.path).map_or_else(
+            |err| {
+                warn!(error = %err, "Starting with empty store");
+                HashMap::new()
+            },
+            |file| {
                 let reader = BufReader::new(file);
                 serde_json::from_reader(reader).unwrap_or_else(|err| {
                     warn!(error = %err, "Starting with empty store");
                     HashMap::new()
                 })
-            })
-            .unwrap_or_else(|err| {
-                warn!(error = %err, "Starting with empty store");
-                HashMap::new()
-            });
+            },
+        );
 
         Self { storage, config }
     }

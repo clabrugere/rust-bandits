@@ -17,7 +17,7 @@ impl MaybeSeededRng {
     pub fn new(seed: Option<u64>) -> Self {
         Self {
             seed,
-            rng: seed.map_or_else(SmallRng::from_os_rng, |seed| SmallRng::seed_from_u64(seed)),
+            rng: seed.map_or_else(SmallRng::from_os_rng, SmallRng::seed_from_u64),
         }
     }
 
