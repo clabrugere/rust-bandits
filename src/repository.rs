@@ -89,6 +89,9 @@ impl Repository {
     }
 
     pub fn clear(&mut self) {
+        self.experiments
+            .values()
+            .for_each(|experiment| experiment.address.do_send(Delete));
         self.experiments.clear();
     }
 
