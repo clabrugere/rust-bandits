@@ -28,7 +28,9 @@ impl UcbArm {
     }
 
     fn sample(&self, alpha: f64, total_count: u64) -> f64 {
-        self.reward + (alpha * (total_count as f64).ln() / (2.0 * (self.count as f64)))
+        let exploration_boost =
+            (alpha * (total_count as f64).ln() / (2.0 * (self.count as f64))).sqrt();
+        self.reward + exploration_boost
     }
     fn reset(&mut self, cumulative_reward: Option<f64>, count: Option<u64>) {
         self.reward = cumulative_reward.unwrap_or_default();
