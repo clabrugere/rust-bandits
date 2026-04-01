@@ -106,8 +106,12 @@ impl Repository {
         let address = Supervisor::start({
             let state_store = self.state_store.clone();
             let save_every = self.experiment_config.save_every;
+            let mut first_policy = Some(policy);
 
-            move |_| Experiment::new(experiment_id, Some(policy), state_store.clone(), save_every)
+            move |_| {
+                let policy = first_policy.take(); // Some on first start, None on supervisor restarts
+                Experiment::new(experiment_id, policy, state_store.clone(), save_every)
+            }
         });
 
         self.experiments.insert(
