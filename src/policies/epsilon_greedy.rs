@@ -122,6 +122,7 @@ impl Policy for EpsilonGreedy {
             self.arms
                 .get_mut(&arm_id)
                 .map(|arm| {
+                    self.active_pull_count -= arm.count;
                     arm.reset(cumulative_reward, count);
                     self.active_pull_count += count.unwrap_or_default();
                 })
