@@ -190,7 +190,7 @@ impl Policy for ThompsonSampling {
             .iter()
             .filter(|(_, arm)| arm.is_active)
             .filter_map(|(arm_id, arm)| {
-                arm.sample(self.rng.get_rng())
+                arm.sample(self.rng.rng_mut())
                     .map_or(None, |sample| Some((arm_id, sample)))
             })
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))

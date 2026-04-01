@@ -182,14 +182,14 @@ impl Policy for EpsilonGreedy {
         let epsilon = self.epsilon_with_decay();
 
         // either sample a random arm or return the one with the highest reward so far
-        let arm_id = if self.rng.get_rng().random::<f64>() < epsilon {
+        let arm_id = if self.rng.rng_mut().random::<f64>() < epsilon {
             arm_iterator
                 .map(|(&arm_id, _)| arm_id)
-                .choose(&mut self.rng.get_rng())
+                .choose(&mut self.rng.rng_mut())
                 .ok_or(PolicyError::NoArmsAvailable)
         } else {
             arm_iterator
-                .map(|(arm_id, arm)| (arm_id, arm.sample(self.rng.get_rng())))
+                .map(|(arm_id, arm)| (arm_id, arm.sample(self.rng.rng_mut())))
                 .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                 .map(|(&arm_id, _)| arm_id)
                 .ok_or(PolicyError::NoArmsAvailable)

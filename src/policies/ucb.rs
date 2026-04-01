@@ -149,7 +149,7 @@ impl Policy for Ucb {
             .iter()
             .filter(|(_, arm)| arm.is_active && (arm.count == 0))
             .map(|(&arm_id, _)| arm_id)
-            .choose(&mut self.rng.get_rng())
+            .choose(&mut self.rng.rng_mut())
         {
             Ok(arm_id)
         } else {

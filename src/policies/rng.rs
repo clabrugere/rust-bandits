@@ -21,7 +21,7 @@ impl MaybeSeededRng {
         }
     }
 
-    pub fn get_rng(&mut self) -> &mut SmallRng {
+    pub fn rng_mut(&mut self) -> &mut SmallRng {
         &mut self.rng
     }
 }
