@@ -50,7 +50,7 @@ pub enum ServiceError {
     },
     #[error("Repository error: {0}")]
     Repository(#[from] RepositoryError),
-    #[error("Persitence error: {0}")]
+    #[error("Persistence error: {0}")]
     Persistence(#[from] PersistenceError),
     #[error("No accountant defined")]
     Accountant,
