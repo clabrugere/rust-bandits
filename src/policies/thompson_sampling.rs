@@ -16,7 +16,7 @@ use std::collections::HashMap;
 const EPS: f64 = 1e-6;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct ThomsonSamplingArm {
+struct ThompsonSamplingArm {
     alpha: f64,
     beta: f64,
     count: u64,
@@ -25,7 +25,7 @@ struct ThomsonSamplingArm {
     is_active: bool,
 }
 
-impl ThomsonSamplingArm {
+impl ThompsonSamplingArm {
     fn new(initial_reward: f64, initial_count: u64, halflife_seconds: Option<f64>) -> Self {
         Self {
             alpha: 1.0 + initial_reward,
@@ -92,14 +92,14 @@ impl ThomsonSamplingArm {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ThomsonSampling {
+pub struct ThompsonSampling {
     halflife_seconds: Option<f64>,
-    arms: HashMap<usize, ThomsonSamplingArm>,
+    arms: HashMap<usize, ThompsonSamplingArm>,
     rng: MaybeSeededRng,
     next_arm_id: usize,
 }
 
-impl ThomsonSampling {
+impl ThompsonSampling {
     // Decayed Thomson Sampling using halflife, after which past evidence is halved
     pub fn new(halflife_seconds: Option<f64>, seed: Option<u64>) -> Self {
         Self {
@@ -111,16 +111,16 @@ impl ThomsonSampling {
     }
 }
 
-impl CloneBoxedPolicy for ThomsonSampling {
+impl CloneBoxedPolicy for ThompsonSampling {
     fn clone_box(&self) -> Box<dyn Policy + Send> {
         Box::new(self.clone())
     }
 }
 
 #[typetag::serde]
-impl Policy for ThomsonSampling {
+impl Policy for ThompsonSampling {
     fn policy_type(&self) -> PolicyType {
-        PolicyType::ThomsonSampling {
+        PolicyType::ThompsonSampling {
             halflife_seconds: self.halflife_seconds,
             seed: self.rng.seed,
         }
@@ -147,7 +147,7 @@ impl Policy for ThomsonSampling {
         let arm_id = self.next_arm_id;
         self.arms.insert(
             arm_id,
-            ThomsonSamplingArm::new(initial_reward, initial_count, self.halflife_seconds),
+            ThompsonSamplingArm::new(initial_reward, initial_count, self.halflife_seconds),
         );
         self.next_arm_id += 1;
 
@@ -242,8 +242,8 @@ mod tests {
 
     const DEFAULT_SEED: Option<u64> = Some(1234);
 
-    fn make_policy() -> ThomsonSampling {
-        ThomsonSampling::new(None, DEFAULT_SEED)
+    fn make_policy() -> ThompsonSampling {
+        ThompsonSampling::new(None, DEFAULT_SEED)
     }
 
     #[test]
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn no_discount() {
-        let mut arm = ThomsonSamplingArm {
+        let mut arm = ThompsonSamplingArm {
             alpha: 1.0,
             beta: 1.0,
             count: 0,
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn no_time_discount() {
-        let mut arm = ThomsonSamplingArm {
+        let mut arm = ThompsonSamplingArm {
             alpha: 1.0,
             beta: 1.0,
             count: 0,
@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn discount() {
-        let mut arm = ThomsonSamplingArm {
+        let mut arm = ThompsonSamplingArm {
             alpha: 1.0,
             beta: 1.0,
             count: 0,

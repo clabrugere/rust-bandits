@@ -1,5 +1,5 @@
 use super::epsilon_greedy::{DecayType, EpsilonGreedy};
-use super::thomson_sampling::ThomsonSampling;
+use super::thompson_sampling::ThompsonSampling;
 use super::ucb::Ucb;
 
 use crate::errors::PolicyError;
@@ -42,7 +42,7 @@ pub enum PolicyType {
         epsilon_decay: Option<DecayType>,
         seed: Option<u64>,
     },
-    ThomsonSampling {
+    ThompsonSampling {
         halflife_seconds: Option<f64>,
         seed: Option<u64>,
     },
@@ -60,10 +60,10 @@ impl PolicyType {
                 epsilon_decay,
                 seed,
             } => Box::new(EpsilonGreedy::new(epsilon, epsilon_decay, seed)),
-            Self::ThomsonSampling {
+            Self::ThompsonSampling {
                 halflife_seconds,
                 seed,
-            } => Box::new(ThomsonSampling::new(halflife_seconds, seed)),
+            } => Box::new(ThompsonSampling::new(halflife_seconds, seed)),
             Self::Ucb { alpha, seed } => Box::new(Ucb::new(alpha, seed)),
         }
     }
