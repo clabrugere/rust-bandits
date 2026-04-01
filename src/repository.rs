@@ -376,7 +376,21 @@ mod tests {
             .await
             .expect("update should succeed");
         ctx.repository
-            .batch_update_experiment(experiment_id, vec![(1.0, arm_id, 3.0), (2.0, arm_id, 1.0)])
+            .batch_update_experiment(
+                experiment_id,
+                vec![
+                    BatchUpdateElement {
+                        timestamp: 1.0,
+                        arm_id,
+                        reward: 3.0,
+                    },
+                    BatchUpdateElement {
+                        timestamp: 2.0,
+                        arm_id,
+                        reward: 1.0,
+                    },
+                ],
+            )
             .await
             .expect("batch update should succeed");
 

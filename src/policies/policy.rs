@@ -16,7 +16,12 @@ pub struct DrawResult {
     pub arm_id: usize,
 }
 
-pub type BatchUpdateElement = (f64, usize, f64);
+#[derive(Debug)]
+pub struct BatchUpdateElement {
+    pub timestamp: f64,
+    pub arm_id: usize,
+    pub reward: f64,
+}
 
 #[derive(Debug, Serialize)]
 pub struct ArmStats {

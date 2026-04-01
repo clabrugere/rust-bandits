@@ -215,9 +215,13 @@ impl Policy for EpsilonGreedy {
     }
 
     fn update_batch(&mut self, updates: &[BatchUpdateElement]) -> Result<(), PolicyError> {
-        updates
-            .iter()
-            .try_for_each(|&(timestamp, arm_id, reward)| self.update(timestamp, arm_id, reward))
+        updates.iter().try_for_each(
+            |&BatchUpdateElement {
+                 timestamp,
+                 arm_id,
+                 reward,
+             }| self.update(timestamp, arm_id, reward),
+        )
     }
 
     fn stats(&self) -> PolicyStats {
@@ -339,13 +343,19 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .map(|draw| BatchUpdateElement {
+                timestamp: draw.timestamp + 1.0,
+                arm_id: draw.arm_id,
+                reward: 1.0,
+            })
             .collect::<Vec<BatchUpdateElement>>();
 
         assert!(policy.update_batch(&updates).is_ok());
-        updates.iter().for_each(|(_, arm_id, reward)| {
-            assert_eq!(policy.arms.get(&arm_id).unwrap().reward, *reward);
-        });
+        updates
+            .iter()
+            .for_each(|BatchUpdateElement { arm_id, reward, .. }| {
+                assert_eq!(policy.arms.get(&arm_id).unwrap().reward, *reward);
+            });
     }
 
     #[test]
@@ -359,7 +369,11 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .map(|draw| BatchUpdateElement {
+                timestamp: draw.timestamp + 1.0,
+                arm_id: draw.arm_id,
+                reward: 1.0,
+            })
             .collect::<Vec<BatchUpdateElement>>();
 
         _ = policy.update_batch(&updates);
@@ -382,7 +396,11 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .map(|draw| BatchUpdateElement {
+                timestamp: draw.timestamp + 1.0,
+                arm_id: draw.arm_id,
+                reward: 1.0,
+            })
             .collect::<Vec<BatchUpdateElement>>();
 
         _ = policy.update_batch(&updates);
@@ -402,7 +420,11 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .map(|draw| BatchUpdateElement {
+                timestamp: draw.timestamp + 1.0,
+                arm_id: draw.arm_id,
+                reward: 1.0,
+            })
             .collect::<Vec<BatchUpdateElement>>();
 
         _ = policy.update_batch(&updates);
@@ -428,7 +450,11 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .map(|draw| BatchUpdateElement {
+                timestamp: draw.timestamp + 1.0,
+                arm_id: draw.arm_id,
+                reward: 1.0,
+            })
             .collect::<Vec<BatchUpdateElement>>();
 
         _ = policy.update_batch(&updates);
@@ -440,7 +466,11 @@ mod tests {
             .collect::<Vec<DrawResult>>();
         let updates = draws
             .iter()
-            .map(|draw| (draw.timestamp + 1.0, draw.arm_id, 1.0))
+            .map(|draw| BatchUpdateElement {
+                timestamp: draw.timestamp + 1.0,
+                arm_id: draw.arm_id,
+                reward: 1.0,
+            })
             .collect::<Vec<BatchUpdateElement>>();
 
         _ = policy.update_batch(&updates);

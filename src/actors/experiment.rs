@@ -239,7 +239,7 @@ impl Handler<UpdateBatch> for Experiment {
 
     fn handle(&mut self, msg: UpdateBatch, _: &mut Self::Context) -> Self::Result {
         let mut updates = msg.updates;
-        updates.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
+        updates.sort_unstable_by(|a, b| a.timestamp.total_cmp(&b.timestamp));
 
         self.with_policy_mut(|policy| policy.update_batch(&updates))
     }
