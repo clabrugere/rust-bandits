@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::policies::BatchUpdateElement;
+
 #[derive(Debug, Deserialize)]
 pub(super) struct AddArmPayload {
     pub initial_reward: Option<f64>,
@@ -17,6 +19,16 @@ pub(super) struct UpdatePayload {
     pub timestamp: f64,
     pub arm_id: usize,
     pub reward: f64,
+}
+
+impl Into<BatchUpdateElement> for UpdatePayload {
+    fn into(self) -> BatchUpdateElement {
+        BatchUpdateElement {
+            timestamp: self.timestamp,
+            arm_id: self.arm_id,
+            reward: self.reward,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

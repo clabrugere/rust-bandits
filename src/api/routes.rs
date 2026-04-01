@@ -7,7 +7,7 @@ use super::responses::{
 
 use crate::api::requests::ResetArmPayload;
 use crate::errors::ApiError;
-use crate::policies::{BatchUpdateElement, PolicyType};
+use crate::policies::PolicyType;
 use crate::repository::Repository;
 
 use actix_web::{
@@ -246,12 +246,8 @@ async fn update_batch(
     let updates = payload
         .into_inner()
         .updates
-        .iter()
-        .map(|u| BatchUpdateElement {
-            timestamp: u.timestamp,
-            arm_id: u.arm_id,
-            reward: u.reward,
-        })
+        .into_iter()
+        .map(Into::into)
         .collect();
 
     let response = repository
