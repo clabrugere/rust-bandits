@@ -200,12 +200,17 @@ impl Policy for EpsilonGreedy {
 
     fn update(&mut self, timestamp: f64, arm_id: usize, reward: f64) -> Result<(), PolicyError> {
         // update the arm statistics
-        self.arms
+        let arm = self
+            .arms
             .get_mut(&arm_id)
-            .ok_or(PolicyError::ArmNotFound(arm_id))?
-            .update(reward, timestamp);
-        self.active_pull_count += 1;
+            .ok_or(PolicyError::ArmNotFound(arm_id))?;
 
+        if !arm.is_active {
+            return Err(PolicyError::InactiveArm(arm_id));
+        }
+
+        arm.update(reward, timestamp);
+        self.active_pull_count += 1;
         Ok(())
     }
 

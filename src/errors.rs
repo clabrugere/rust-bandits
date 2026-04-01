@@ -10,6 +10,8 @@ pub enum PolicyError {
     NoArmsAvailable,
     #[error("Arm {0} not found")]
     ArmNotFound(usize),
+    #[error("Arm {0} is inactive")]
+    InactiveArm(usize),
     #[error("Sampling error: {0}")]
     SamplingError(String),
 }
