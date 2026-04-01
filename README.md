@@ -74,12 +74,12 @@ The system currently exposes 16 routes:
 | `POST v1/create` 	| `{"EpsilonGreedy": {"epsilon": 0.1, "epsilon_decay": null, "seed": null}}` 	| `{"experiment_id": ...}` 	| create a new experiment and return its unique id 	|
 | `GET v1/{experiment_id}/ping` 	| `-` 	|  	| ping a specific experiment actor 	|
 | `PUT v1/{experiment_id}/reset` 	| `-` 	|  	| reset the state of the experiment 	|
-| `POST v1/{experiment_id}/{arm_id}/reset` 	| `{"cumulative_reward": 0.0, "count": 0}` 	|  	| reset a single arm for an experiment 	|
+| `PUT v1/{experiment_id}/{arm_id}/reset` 	| `{"cumulative_reward": 0.0, "count": 0}` 	|  	| reset a single arm for an experiment 	|
 | `DELETE v1/{experiment_id}/delete` 	| `-` 	|  	| delete an experiment 	|
 | `POST v1/{experiment_id}/add_arm` 	| `{"initial_reward": 1.0, "initial_count": 10}` 	| `{"arm_id": ...}` 	| create a new variant for a given experiment and return its id 	|
 | `PUT v1/{experiment_id}/{arm_id}/disable` 	| `-` 	|  	| disable a specific arm so it is excluded from draws 	|
 | `PUT v1/{experiment_id}/{arm_id}/enable` 	| `-` 	|  	| re-enable a previously disabled arm 	|
-| `DELETE v1/{experiment_id}/{arm_id}/delete` 	| `-` 	|  	| delete a given variant for a given experiment 	|
+| `DELETE v1/{experiment_id}/{arm_id}` 	| `-` 	|  	| delete a given variant for a given experiment 	|
 | `GET v1/{experiment_id}/draw` 	| `-` 	| `{"timestamp": ..., "arm_id": ...}` 	| get the current best performing variant of an experiment 	|
 | `PUT v1/{experiment_id}/update` 	| `{"timestamp": 1700000000.0, "arm_id": 1, "reward": 1.0}` 	|  	| update an experiment with a single event 	|
 | `PUT v1/{experiment_id}/update_batch` 	| `{"updates": [{"timestamp": 1700000000.0, "arm_id": 1, "reward": 1.0}]}` 	|  	| send multiple updates at once 	|
