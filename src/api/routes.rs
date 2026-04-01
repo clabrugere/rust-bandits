@@ -86,7 +86,7 @@ async fn reset(repository: Data<RwLock<Repository>>, path: Path<String>) -> Resu
     Ok(response)
 }
 
-#[post("{experiment_id}/{arm_id}/reset")]
+#[put("{experiment_id}/{arm_id}/reset")]
 async fn reset_arm(
     repository: Data<RwLock<Repository>>,
     path: Path<(String, usize)>,
@@ -182,7 +182,7 @@ async fn enable_arm(
     Ok(response)
 }
 
-#[delete("{experiment_id}/{arm_id}/delete")]
+#[delete("{experiment_id}/{arm_id}")]
 async fn delete_arm(
     repository: Data<RwLock<Repository>>,
     path: Path<(String, usize)>,
