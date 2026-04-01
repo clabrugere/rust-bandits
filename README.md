@@ -20,9 +20,9 @@ In our system, the HTTP server interacts with a **Repository** that is responsib
 
 Each experiment is an actor implementing some policy, handling the optimization. The repository either creates or deletes experiments, or simply dispatch a message to a running experiment. This allows to have low coupling between experiments and to process requests for different experiments in a non blocking way. 
 
-Individual experiments periodically send their state to a **StateStore** actor, that is also persisted to disk for recovery in case of an application crash.
+Individual experiments periodically send their state to a **StateStore** actor, which writes each experiment's policy directly to disk as `<experiment_id>.json` inside a configurable directory. StateStore is a pure I/O layer — it holds no in-memory copy of the policies, so there is no duplication of state between experiments and the store.
 
-Upon panic, experiments restart is managed by Actix-web **Supervisor**, with a custom logic in `started` method of **Experiment** actor allowing to reload the last known state.
+Upon panic, experiment restart is managed by the Actix **Supervisor**. The factory closure passes the initial policy on first start, and `None` on any subsequent restart, causing the `Experiment` actor to reload its latest persisted state from StateStore on recovery.
 
 Finally, every request along with the response is processed by a middleware and sent to an **Accountant** actor, responsible for tracking. It interacts with some storage to persist logs (such as a relational database) while not blocking the rest of the application.
 
@@ -98,7 +98,7 @@ The system currently exposes 16 routes:
 **Policies**
 - [x] Optional epsilon decay
 - [x] UCB
-- [x] Thomson Sampling for binary rewards (Beta prior)
+- [x] Thompson Sampling for binary rewards (Beta prior)
 - [ ] Decayed rewards for non stationary environments
 - [ ] Contextual bandits
 
