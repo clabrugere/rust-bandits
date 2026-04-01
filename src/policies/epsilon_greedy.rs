@@ -64,6 +64,7 @@ pub struct EpsilonGreedy {
     epsilon_decay: Option<DecayType>,
     active_pull_count: u64,
     rng: MaybeSeededRng,
+    next_arm_id: usize,
 }
 
 impl EpsilonGreedy {
@@ -74,6 +75,7 @@ impl EpsilonGreedy {
             epsilon_decay,
             active_pull_count: 0,
             rng: MaybeSeededRng::new(seed),
+            next_arm_id: 0,
         }
     }
 
@@ -135,9 +137,10 @@ impl Policy for EpsilonGreedy {
     }
 
     fn add_arm(&mut self, cumulative_reward: f64, count: u64) -> usize {
-        let arm_id = self.arms.len();
+        let arm_id = self.next_arm_id;
         self.arms
             .insert(arm_id, EpsilonGreedyArm::new(cumulative_reward, count));
+        self.next_arm_id += 1;
         self.active_pull_count += count;
 
         arm_id

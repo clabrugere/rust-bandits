@@ -96,6 +96,7 @@ pub struct ThomsonSampling {
     halflife_seconds: Option<f64>,
     arms: HashMap<usize, ThomsonSamplingArm>,
     rng: MaybeSeededRng,
+    next_arm_id: usize,
 }
 
 impl ThomsonSampling {
@@ -105,6 +106,7 @@ impl ThomsonSampling {
             halflife_seconds,
             arms: HashMap::new(),
             rng: MaybeSeededRng::new(seed),
+            next_arm_id: 0,
         }
     }
 }
@@ -142,11 +144,12 @@ impl Policy for ThomsonSampling {
     }
 
     fn add_arm(&mut self, initial_reward: f64, initial_count: u64) -> usize {
-        let arm_id = self.arms.len();
+        let arm_id = self.next_arm_id;
         self.arms.insert(
             arm_id,
             ThomsonSamplingArm::new(initial_reward, initial_count, self.halflife_seconds),
         );
+        self.next_arm_id += 1;
 
         arm_id
     }

@@ -54,6 +54,7 @@ pub struct Ucb {
     arms: HashMap<usize, UcbArm>,
     alpha: f64,
     rng: MaybeSeededRng,
+    next_arm_id: usize,
 }
 
 impl Ucb {
@@ -62,6 +63,7 @@ impl Ucb {
             arms: HashMap::new(),
             alpha,
             rng: MaybeSeededRng::new(seed),
+            next_arm_id: 0,
         }
     }
 
@@ -107,9 +109,10 @@ impl Policy for Ucb {
     }
 
     fn add_arm(&mut self, cumulative_reward: f64, count: u64) -> usize {
-        let arm_id = self.arms.len();
+        let arm_id = self.next_arm_id;
         self.arms
             .insert(arm_id, UcbArm::new(cumulative_reward, count));
+        self.next_arm_id += 1;
 
         arm_id
     }
